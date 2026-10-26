@@ -36,6 +36,7 @@ export function archerFrame(actor: Defender): number {
     : 0;
 }
 export function bowFrame(actor: Defender): number {
+  if (actor.shot?.held) return (actor.shot.charge ?? 0) < 0.45 ? 1 : 2;
   if (actor.shot)
     return actor.shot.remaining / actor.shot.duration > 0.6 ? 1 : 2;
   return actor.releaseFlash > 0 ? 3 : 0;

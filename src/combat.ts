@@ -4,6 +4,7 @@ import { FLOOR_HEIGHT, FORT } from "./map";
 
 /** Shared height calculation keeps visual arcs and parapet collision consistent. */
 export function projectileHeight(q: Projectile): number {
+  if (q.manualAim) return q.startZ;
   const progress = clamp(1 - q.life / q.total, 0, 1);
   const arc = q.kind === "fire" ? 90 : 28;
   const height =

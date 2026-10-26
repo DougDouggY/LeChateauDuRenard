@@ -3,7 +3,7 @@ import type { Renderer } from "./renderer";
 import { SIDES, distance, type Order, type Side } from "./types";
 import { EQUIPMENT } from "./workshop";
 import { HEROES, hero } from "./heroes";
-import { frontState, priorityFront, FRONT_COLORS } from "./fronts";
+import { frontState, priorityFront } from "./fronts";
 export const fox = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M7 8l14 9h6l14-9-3 25-14 10L10 33z" fill="currentColor"/><path d="M12 27l9 3 3 9 3-9 9-3-6 9-6 5-6-5z" fill="#172b35"/><path d="M14 23l6 3m8 0 6-3" stroke="#172b35" stroke-width="3"/></svg>`;
 const icons = {
   bow: "➶",
@@ -20,7 +20,6 @@ export class UI {
   orderOpen = false;
   shopOpen = false;
   helpOpen = false;
-  mini!: HTMLCanvasElement;
   mode = "";
   shopSignature = "";
   selectedSlot = 0;
@@ -33,12 +32,9 @@ export class UI {
   ) {
     this.hud.innerHTML = `<header class="topbar"><div class="brand"><span class="brand-fox">${fox}</span><div>LE CHÂTEAU <span>DU RENARD</span><small>LA DERNIÈRE VEILLE</small></div></div><div class="wave-panel"><div class="wave-top"><span class="live-dot"></span><span id="phase-label">PRÉPARATION</span><span id="wave-count">VEILLE 01</span></div><div class="wave-track"><i id="wave-progress"></i></div><div class="wave-bottom"><span id="wave-description">Les ténèbres approchent</span><span id="wave-timer">10 s</span></div></div><div class="top-actions"><div class="resource"><span>${icons.wood}</span><strong id="wallet">0</strong><small>OR</small></div><button class="icon-btn" id="sound" title="Activer les sons" aria-label="Activer les sons">♪</button><button class="icon-btn" id="help" title="Commandes (H)" aria-label="Afficher les commandes">?</button><button class="icon-btn" id="pause" title="Pause (Échap)" aria-label="Mettre en pause">Ⅱ</button></div></header>
  <aside class="squad-panel"><div class="eyebrow">LA GARDE DU RENARD <span>03</span></div><div id="squad"></div><button id="orders-button" class="text-btn"><span>⚑</span> Ordres aux compagnons <kbd>Tab</kbd></button><div id="orders" class="orders hidden"></div></aside>
- <aside class="map-panel"><div class="map-title"><span class="eyebrow">LES QUATRE FRONTS</span><span class="map-compass">N ↑</span></div><div class="map-wrap"><canvas id="minimap" width="240" height="190" aria-label="Mini-carte des défenseurs et des ennemis"></canvas><span class="map-corner tl"></span><span class="map-corner br"></span></div><div id="fronts" class="fronts"></div><button id="overview-button" class="overview-button" aria-pressed="false">Vue d’ensemble <kbd>M</kbd></button><div class="map-legend"><span><i class="dot gold"></i>Vous</span><span><i class="dot green"></i>Alliés</span><span><i class="dot red"></i>Ennemis</span></div></aside>
- <section class="fort-status"><div class="eyebrow"><span>INTÉGRITÉ DU CHÂTEAU</span><strong id="integrity">100 %</strong></div><div class="fort-track"><i id="integrity-bar"></i></div><div id="fort-detail">Les remparts tiennent bon.</div></section>
  <div class="objective"><span class="objective-mark">✦</span><div class="eyebrow">VOTRE MISSION</div><strong id="objective-title">Tenez jusqu’à l’aube.</strong><p id="objective-text">Défendez les quatre fronts avec votre garde.</p></div>
  <div id="notice" class="notice hidden"></div><div id="assault-alert" class="assault-alert hidden" role="status" aria-live="polite"><span class="assault-emblem">⚑</span><div class="eyebrow" id="assault-wave"></div><strong id="assault-text"></strong><span class="assault-rule"></span></div><div id="context" class="context hidden"></div>
- <footer class="bottom-bar"><div class="chapter"><span class="chapter-line"></span><div><small>LES TERRES OUBLIÉES</small><strong>La nuit des braises</strong><span>Prototype jouable · v0.4</span></div></div><div class="loadout"><div id="weapon2" class="weapon active"><span class="weapon-icon">${icons.bow}</span><span>Arc de garde<small id="ammo">24 flèches</small></span></div><div class="loadout-divider"></div><div id="power-slot" class="power-slot"><kbd>CLIC DROIT</kbd><span id="power-symbol">✹</span><div><b id="power-name">Flèche explosive</b><small id="power-state">Prêt</small></div><i id="power-ready"></i></div><div class="loadout-divider"></div><div class="dodge"><kbd>Espace</kbd><span>Esquive</span><i id="dodge-bar"></i></div></div><div class="bottom-tools"><button id="shop-button"><span>⚒</span> Ouvrier <kbd>B</kbd></button><span>Molette · zoom</span></div></footer><div class="key-strip"><span><kbd>ZQSD / WASD</kbd> Se déplacer</span><span><kbd>CLIC G.</kbd> Tirer</span><span><kbd>CLIC D.</kbd> Pouvoir</span><span><kbd>E</kbd> Interagir</span><span><kbd>R</kbd> Recharger / réparer</span></div><section id="drawer" class="drawer hidden"></section>`;
-    this.mini = this.hud.querySelector("#minimap")!;
+ <footer class="bottom-bar"><div class="chapter"><span class="chapter-line"></span><div><small>LES TERRES OUBLIÉES</small><strong>La nuit des braises</strong><span>Prototype jouable · v0.5</span></div></div><div class="loadout"><div id="weapon2" class="weapon active"><span class="weapon-icon">${icons.bow}</span><span>Arc de garde<small id="ammo">24 flèches</small></span></div><div class="loadout-divider"></div><div id="power-slot" class="power-slot"><kbd>CLIC DROIT</kbd><span id="power-symbol">✹</span><div><b id="power-name">Flèche explosive</b><small id="power-state">Prêt</small></div><i id="power-ready"></i></div><div class="loadout-divider"></div><div class="dodge"><kbd>Shift</kbd><span>Dash</span><i id="dodge-bar"></i></div></div><div class="bottom-tools"><button id="overview-button" aria-pressed="false">Vue d’ensemble <kbd>M</kbd></button><button id="shop-button"><span>⚒</span> Ouvrier <kbd>B</kbd></button><span>Molette · zoom</span></div></footer><div class="key-strip"><span><kbd>ZQSD / WASD</kbd> Se déplacer</span><span><kbd>CLIC G.</kbd> Maintenir / relâcher</span><span><kbd>CLIC D.</kbd> Pouvoir</span><span><kbd>E</kbd> Interagir</span><span><kbd>R</kbd> Recharger / réparer</span></div><section id="drawer" class="drawer hidden"></section>`;
     this.hud
       .querySelector("#overview-button")!
       .addEventListener("click", () => this.renderer.toggleOverview());
@@ -72,6 +68,7 @@ export class UI {
     const g = this.getGame();
     if (!g.started || g.phase === "defeat") return;
     g.paused = !g.paused;
+    if (g.paused) g.cancelCharge();
     this.mode = "";
     this.drawOverlay();
   }
@@ -129,7 +126,7 @@ export class UI {
     const drawer = this.hud.querySelector("#drawer")!;
     drawer.classList.toggle("hidden", !this.shopOpen && !this.helpOpen);
     if (this.helpOpen) {
-      drawer.innerHTML = `<button class="drawer-close" aria-label="Fermer">×</button><div class="eyebrow">LE MANUEL DE LA GARDE</div><h2>Chaque geste compte.</h2><dl><dt>ZQSD / WASD / flèches</dt><dd>Déplacez-vous librement sur la plateforme, entièrement au niveau des remparts.</dd><dt>Souris + clic gauche</dt><dd>Visez et tirez à l’arc. La corde se tend pendant 0,24 s, puis la flèche est lâchée.</dd><dt>Clic droit · Pouvoir</dt><dd>Utilise le pouvoir de votre archer : ${hero(this.getGame().player.hero).powerName}. Il consomme des flèches et possède sa propre recharge, affichée en bas. Les alliés utilisent leur pouvoir seuls.</dd><dt>Espace</dt><dd>Esquive rapide et courte invulnérabilité.</dd><dt>E</dt><dd>Remplissez votre carquois près de la réserve centrale. Entre les manches, parlez à Gaspard, l’ouvrier.</dd><dt>B · L’ouvrier</dt><dd>Entre les manches, choisissez une baliste ou une réserve, puis cliquez sur un emplacement éclairé. Gaspard va chercher la commande, l’apporte et l’installe. Échap annule le choix d’emplacement sans dépense.</dd><dt>Baliste achetée</dt><dd>E pour la servir ; clic pour tirer ; R pour recharger (2 pièces) ; F pour la transporter ; E pour la déposer.</dd><dt>Maintenir R à pied</dt><dd>Répare une structure proche en dépensant des pièces.</dd><dt>M · Vue d’ensemble</dt><dd>Affiche le château et les fronts attaqués. M de nouveau pour suivre votre archer.</dd><dt>Tab / H / Échap</dt><dd>Ordres individuels / aide / pause.</dd></dl><p class="drawer-note">Départ : trois arcs, une réserve et aucune baliste. Chaque ennemi vaincu rapporte 10 pièces (20 pour une brute), puis 45 pièces à la fin de la manche. Gaspard arrive par l’escalier central pendant la pause de 60 secondes. Une livraison en cours termine avant le prochain assaut.</p>`;
+      drawer.innerHTML = `<button class="drawer-close" aria-label="Fermer">×</button><div class="eyebrow">LE MANUEL DE LA GARDE</div><h2>Chaque geste compte.</h2><dl><dt>ZQSD / WASD / flèches</dt><dd>Déplacez-vous librement sur la plateforme, entièrement au niveau des remparts.</dd><dt>Souris + clic gauche</dt><dd>Maintenez le clic gauche pour bander l’arc, puis relâchez pour tirer vers la souris. La pleine charge prend 0,95 s : portée de 250 à 1 300, dégâts de 18 à 56 avant améliorations. Aucun tir automatique pendant le maintien.</dd><dt>Clic droit · Pouvoir</dt><dd>Utilise le pouvoir de votre archer : ${hero(this.getGame().player.hero).powerName}. Il consomme des flèches et possède sa propre recharge, affichée en bas. Les alliés utilisent leur pouvoir seuls.</dd><dt>Shift / Espace</dt><dd>Dash dans la direction du déplacement, ou vers la visée à l’arrêt. Recharge de 1,5 s.</dd><dt>E</dt><dd>Remplissez votre carquois près de la réserve centrale. Entre les manches, parlez à Gaspard, l’ouvrier.</dd><dt>B · L’ouvrier</dt><dd>Entre les manches, choisissez une baliste ou une réserve, puis cliquez sur un emplacement éclairé. Gaspard va chercher la commande, l’apporte et l’installe. Échap annule le choix d’emplacement sans dépense.</dd><dt>Baliste achetée</dt><dd>E pour la servir ; clic pour tirer ; R pour recharger (2 pièces) ; F pour la transporter ; E pour la déposer.</dd><dt>Maintenir R à pied</dt><dd>Répare une structure proche en dépensant des pièces.</dd><dt>M · Vue d’ensemble</dt><dd>Affiche le château et les fronts attaqués. M de nouveau pour suivre votre archer.</dd><dt>Tab / H / Échap</dt><dd>Ordres individuels / aide / pause.</dd></dl><p class="drawer-note">Départ : trois arcs, une réserve et aucune baliste. Chaque ennemi vaincu rapporte 10 pièces (20 pour une brute), puis 45 pièces à la fin de la manche. Gaspard arrive par l’escalier central pendant la pause de 60 secondes. Une livraison en cours termine avant le prochain assaut.</p>`;
     } else if (this.shopOpen) {
       const g = this.getGame(),
         w = g.workshop,
@@ -329,18 +326,6 @@ export class UI {
       (g.phase === "preparation"
         ? clampPercent(g.remaining / (g.wave === 0 ? 25 : 60))
         : clampPercent(1 - g.spawnLeft / (9 + g.wave * 4))) + "%";
-    this.set("integrity", `${Math.round(g.integrity * 100)} %`);
-    (this.hud.querySelector("#integrity-bar") as HTMLElement).style.width =
-      `${g.integrity * 100}%`;
-    const breaches = g.walls.filter((w) => w.hp <= 0).length;
-    this.set(
-      "fort-detail",
-      breaches
-        ? `${breaches} brèche${breaches > 1 ? "s" : ""} ! Maintenez R pour réparer.`
-        : g.integrity < 0.7
-          ? "Les défenses ont besoin de réparations."
-          : "Les remparts tiennent bon.",
-    );
     const squadKey =
       this.getGame()
         .defenders.map((d) =>
@@ -368,16 +353,9 @@ export class UI {
     }
     const frontInfo = frontState(g),
       focus = priorityFront(g, frontInfo);
-    this.hud.querySelector("#fronts")!.innerHTML = frontInfo
-      .map(
-        (f) =>
-          `<div class="front-card ${f.active ? "attacked" : ""} ${f.breaches ? "breached" : ""}" data-front="${f.side}" style="--front-color:${FRONT_COLORS[f.side]}"><div><i></i><strong>${SIDES[f.side].toUpperCase()}</strong><b>${f.enemies ? `${f.enemies} ennemis` : f.incoming ? "En approche" : "Calme"}</b></div><span>Rempart ${Math.round(f.integrity * 100)} %${f.breaches ? ` · ${f.breaches} brèche(s)` : ""}</span><em style="width:${f.integrity * 100}%"></em></div>`,
-      )
-      .join("");
     this.hud
       .querySelector("#overview-button")!
       .setAttribute("aria-pressed", String(this.renderer.overview));
-    this.renderer.drawMinimap(this.mini, g);
     this.set("ammo", `${p.ammo} / 24 flèches`);
     (this.hud.querySelector("#dodge-bar") as HTMLElement).style.width =
       `${(1 - p.dodgeCooldown / 1.5) * 100}%`;

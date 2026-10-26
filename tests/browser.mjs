@@ -204,7 +204,12 @@ try {
       const p = window.__renderer.screen(e);
       return { x: p.x, y: p.y - 25 };
     }, enemyId);
-    if (pos) await page.mouse.click(pos.x, pos.y);
+    if (pos) {
+      await page.mouse.move(pos.x, pos.y);
+      await page.mouse.down();
+      await page.waitForTimeout(1000);
+      await page.mouse.up();
+    }
     await page.waitForTimeout(700);
   }
   assert.ok(
@@ -634,12 +639,10 @@ try {
     g.walls.find((w) => w.side === 1).hp = 0;
     g.remaining = 10000;
   });
-  await page.waitForFunction(() =>
-    document.querySelector('[data-front="1"]')?.textContent.includes("brèche"),
-  );
-  assert.match(await page.locator('[data-front="1"]').innerText(), /1 ennemis/);
+  assert.equal(await page.locator("#minimap").count(), 0);
+  assert.equal(await page.locator(".fort-status").count(), 0);
   check(
-    "Active fronts show living enemies, damaged wall integrity and breaches",
+    "Right-side map and wall-health panel are removed; health remains in the scene",
   );
   const previousZoom = await page.evaluate(() => window.__renderer.zoom);
   await page.keyboard.press("m");
@@ -658,6 +661,60 @@ try {
     "M shows the entire castle; the overview button restores the player's zoom",
   );
   await page.screenshot({ path: "artifacts/front-guidance.png" });
+  await page.evaluate(() => {
+    const g = window.__game();
+    g.phase = "preparation";
+    g.remaining = 10000;
+    g.enemies = [];
+    g.projectiles = [];
+    g.defenders.slice(1).forEach((d) => (d.dead = 1000));
+    Object.assign(g.player, { x: 1200, y: 1100, ammo: 24, cooldown: 0 });
+    Object.assign(window.__renderer.camera, { x: 1200, y: 1010 });
+  });
+  await page.waitForTimeout(1000);
+  await page.mouse.move(900, 400);
+  await page.mouse.down();
+  await page.waitForFunction(() => window.__game().player.shot?.charge >= 0.99);
+  assert.equal(
+    await page.evaluate(() => window.__game().projectiles.length),
+    0,
+  );
+  assert.equal(await page.evaluate(() => window.__game().player.ammo), 23);
+  await page.mouse.move(800, 480);
+  await page.waitForTimeout(100);
+  await page.screenshot({ path: "artifacts/bow-charged.png" });
+  await page.mouse.up();
+  await page.waitForFunction(() =>
+    window.__game().projectiles.some((q) => q.ownerId === 0),
+  );
+  const aimError = await page.evaluate(() => {
+    const g = window.__game(),
+      r = window.__renderer,
+      q = g.projectiles.find((q) => q.ownerId === 0);
+    const a = r.screen(g.player, q.startZ),
+      b = r.screen(q, q.startZ);
+    const dx = 800 - a.x,
+      dy = 480 - a.y;
+    return Math.abs(dx * (b.y - a.y) - dy * (b.x - a.x)) / Math.hypot(dx, dy);
+  });
+  assert.ok(
+    aimError < 2,
+    `Projected arrow misses the cursor line by ${aimError}px`,
+  );
+  check(
+    "Holding charges without firing; release follows the updated mouse direction within 2px",
+  );
+  const dashStart = await page.evaluate(() => window.__game().player.x);
+  await page.keyboard.down("d");
+  await page.keyboard.down("Shift");
+  await page.waitForFunction(() => window.__game().player.dodge > 0);
+  await page.waitForTimeout(100);
+  await page.keyboard.up("Shift");
+  await page.keyboard.up("d");
+  assert.ok(
+    (await page.evaluate(() => window.__game().player.x)) > dashStart + 40,
+  );
+  check("Shift triggers a short dash with real keyboard input");
   assert.deepEqual(errors, []);
   check("No browser JavaScript or console errors");
   await writeFile(

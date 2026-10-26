@@ -329,7 +329,7 @@ export class Simulation {
       d.carried = null;
     }
   }
-  shoot(d: Defender, target: Vec) {
+  shoot(d: Defender, target: Vec, manualAim = false) {
     if (d.dead || d.cooldown > 0 || d.shot || d.carried !== null) return;
     if (d.mounted !== null) {
       const b = this.ballistas[d.mounted];
@@ -341,6 +341,10 @@ export class Simulation {
         170 * (1 + 0.25 * this.level("power")),
         "ally",
         "bolt",
+        null,
+        null,
+        d.id,
+        manualAim,
       );
       b.loaded = false;
       b.recoil = 1;
@@ -355,16 +359,25 @@ export class Simulation {
         );
       return;
     }
-    this.drawBow(d, target, null, 1);
+    this.drawBow(d, target, null, 1, manualAim);
   }
-  drawBow(d: Defender, target: Vec, power: PowerId | null, cost: number) {
+  drawBow(
+    d: Defender,
+    target: Vec,
+    power: PowerId | null,
+    cost: number,
+    manualAim = false,
+  ) {
     d.ammo -= cost;
     d.cooldown = 0.62;
     d.attacking = 0.45;
     d.releaseFlash = 0;
     d.facing = Math.atan2(target.y - d.y, target.x - d.x);
-    const lock = this.enemies.find((e) => e.hp > 0 && distance(e, target) < 24);
+    const lock = manualAim
+      ? undefined
+      : this.enemies.find((e) => e.hp > 0 && distance(e, target) < 24);
     d.shot = {
+      manualAim,
       target: { ...target },
       lockId: lock?.id ?? null,
       power,
@@ -373,7 +386,14 @@ export class Simulation {
       ammoCost: cost,
     };
   }
-  useAbility(d: Defender, target: Vec): boolean {
+  cancelCharge() {
+    const p = this.player;
+    if (!p.shot?.held) return;
+    p.ammo = Math.min(24, p.ammo + p.shot.ammoCost);
+    p.shot = null;
+    p.cooldown = 0;
+  }
+  useAbility(d: Defender, target: Vec, manualAim = false): boolean {
     if (!this.started || this.phase === "defeat") return false;
     const h = hero(d.hero);
     if (
@@ -397,14 +417,14 @@ export class Simulation {
       d.ammo = Math.min(24, d.ammo + d.shot.ammoCost);
       d.shot = null;
     }
-    this.drawBow(d, target, h.power, h.ammoCost);
+    this.drawBow(d, target, h.power, h.ammoCost, manualAim);
     d.abilityCooldown = h.cooldown;
     return true;
   }
   releaseArrow(d: Defender, shot: BowShot) {
     let target = shot.target;
     const lock = this.enemies.find((e) => e.id === shot.lockId && e.hp > 0);
-    if (lock) target = { x: lock.x, y: lock.y };
+    if (lock && !shot.manualAim) target = { x: lock.x, y: lock.y };
     d.facing = Math.atan2(target.y - d.y, target.x - d.x);
     d.releaseFlash = 0.16;
     d.attacking = 0.16;
@@ -426,6 +446,7 @@ export class Simulation {
           null,
           power,
           d.id,
+          shot.manualAim,
         );
     } else {
       const damage =
@@ -443,12 +464,14 @@ export class Simulation {
       this.projectile(
         d,
         target,
-        damage + bonus,
+        (shot.charge !== undefined ? 18 + 38 * shot.charge : damage) + bonus,
         "ally",
         "arrow",
         null,
         power,
         d.id,
+        shot.manualAim,
+        shot.charge ?? null,
       );
     }
   }
@@ -462,23 +485,30 @@ export class Simulation {
     wallId: number | null = null,
     power: PowerId | null = null,
     ownerId = -1,
+    manualAim = false,
+    charge: number | null = null,
   ) {
     const dir = toward(from, to),
       speed =
-        kind === "bolt"
-          ? 750
-          : kind === "fire"
-            ? 235
-            : team === "enemy"
-              ? 310
-              : 630;
+        charge !== null
+          ? 480 + charge * 360
+          : kind === "bolt"
+            ? 750
+            : kind === "fire"
+              ? 235
+              : team === "enemy"
+                ? 310
+                : 630;
     const life =
-      team === "enemy"
-        ? distance(from, to) / speed
-        : power === "explosive" || power === "frost"
-          ? Math.max(0.08, (distance(from, to) - 25) / speed)
-          : 2.6;
+      charge !== null
+        ? (250 + charge * 1050 - 25) / speed
+        : team === "enemy"
+          ? distance(from, to) / speed
+          : power === "explosive" || power === "frost"
+            ? Math.max(0.08, (distance(from, to) - 25) / speed)
+            : 2.6;
     this.projectiles.push({
+      manualAim,
       id: this.nextId++,
       power,
       ownerId,
@@ -495,7 +525,11 @@ export class Simulation {
       team,
       kind,
       startZ: elevation(from) + 25,
-      endZ: team === "enemy" && wallId !== null ? 32 : elevation(to) + 18,
+      endZ: manualAim
+        ? elevation(from) + 25
+        : team === "enemy" && wallId !== null
+          ? 32
+          : elevation(to) + 18,
       wallId,
       pierce: power === "piercing" ? 6 : kind === "bolt" ? 3 : 1,
       hit: new Set(),
@@ -752,7 +786,7 @@ export class Simulation {
       d.cooldown = Math.max(0, d.cooldown - dt);
       d.abilityCooldown = Math.max(0, d.abilityCooldown - dt);
       d.releaseFlash = Math.max(0, d.releaseFlash - dt);
-      if (d.shot && d.dead <= 0) {
+      if (d.shot && d.dead <= 0 && !d.shot.held) {
         d.shot.remaining -= dt;
         if (d.shot.remaining <= 0) {
           const shot = d.shot;
@@ -793,7 +827,7 @@ export class Simulation {
             input.keys.has("arrowup"),
         );
       if (
-        input.pressed.has(" ") &&
+        (input.pressed.has("shift") || input.pressed.has(" ")) &&
         p.dodgeCooldown <= 0 &&
         p.carried === null &&
         p.mounted === null
@@ -833,13 +867,40 @@ export class Simulation {
           if (distance(p, old) > 0.1) b.angle = Math.atan2(dy, dx);
         }
       }
-      p.facing = Math.atan2(aim.y - p.y, aim.x - p.x);
+      const bowAim = input.aimRay ?? aim;
+      p.facing = Math.atan2(bowAim.y - p.y, bowAim.x - p.x);
       p.side = sideOf(p);
       if (p.mounted !== null) this.ballistas[p.mounted].angle = p.facing;
       const placing = this.placement !== null;
       if (placing && input.clicked) this.placeOrder(aim);
-      if (!placing && input.abilityPressed) this.useAbility(p, aim);
-      if (!placing && (input.down || input.clicked)) this.shoot(p, aim);
+      if (!placing && input.abilityPressed)
+        this.useAbility(p, bowAim, !!input.aimRay);
+      if (!placing && !input.abilityPressed) {
+        if (p.mounted !== null) {
+          if (input.down || input.clicked)
+            this.shoot(p, bowAim, !!input.aimRay);
+        } else {
+          if (input.clicked && !p.shot) {
+            this.shoot(p, bowAim, !!input.aimRay);
+            const drawn = p.shot as BowShot | null;
+            if (drawn) {
+              drawn.held = true;
+              drawn.charge = 0;
+            }
+          }
+          if (p.shot?.held) {
+            p.shot.target = { ...bowAim };
+            p.shot.charge = Math.min(1, (p.shot.charge ?? 0) + dt / 0.95);
+            p.facing = Math.atan2(bowAim.y - p.y, bowAim.x - p.x);
+            if (!input.down) {
+              const shot = p.shot;
+              p.shot = null;
+              p.cooldown = 0.22;
+              this.releaseArrow(p, shot);
+            }
+          }
+        }
+      }
       if (input.keys.has("r") || input.pressed.has("r")) {
         if (p.mounted !== null) this.reload(p);
         else this.repair(p, dt);
@@ -903,7 +964,14 @@ export class Simulation {
           if (
             e.hp > 0 &&
             !q.hit.has(e.id) &&
-            segmentDistance({ x: q.px, y: q.py }, q, e) < e.radius + 6
+            (q.manualAim
+              ? segmentDistance(
+                  { x: q.px, y: q.py * 0.72 - q.startZ },
+                  { x: q.x, y: q.y * 0.72 - q.startZ },
+                  { x: e.x, y: e.y * 0.72 - elevation(e) - 48 },
+                ) <
+                e.radius + 24
+              : segmentDistance({ x: q.px, y: q.py }, q, e) < e.radius + 6)
           ) {
             this.damageEnemy(e, q.damage);
             q.hit.add(e.id);

@@ -482,7 +482,7 @@ export class Renderer {
     }
     return this.sceneTerrain;
   }
-  render(g: Simulation, dt: number, aim: Vec) {
+  render(g: Simulation, dt: number, aim: Vec, cursor?: Vec) {
     const c = this.ctx,
       p = g.player;
     if (this.overview) {
@@ -700,7 +700,8 @@ export class Renderer {
     ])
       this.torch(c, pos[0], pos[1], g.time);
     if (g.started && p.dead <= 0) {
-      const a = P(aim.x, aim.y, elevation(aim));
+      const point = cursor ? this.world(cursor) : aim;
+      const a = P(point.x, point.y, cursor ? 0 : elevation(aim));
       c.strokeStyle = "#ead7a8";
       c.lineWidth = 1.4;
       c.globalAlpha = 0.75;
@@ -718,6 +719,18 @@ export class Renderer {
           "#ead7a8",
           1.4,
         );
+      if (p.shot?.held) {
+        const charge = p.shot.charge ?? 0;
+        c.beginPath();
+        c.arc(a.x, a.y, 23, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * charge);
+        c.strokeStyle = charge >= 1 ? "#b9e0ab" : "#edc779";
+        c.lineWidth = 4;
+        c.stroke();
+        c.font = "bold 12px sans-serif";
+        c.textAlign = "center";
+        c.fillStyle = "#ffe3a5";
+        c.fillText(`${Math.round(charge * 100)} %`, a.x, a.y + 42);
+      }
       c.globalAlpha = 1;
     }
     c.restore();
@@ -818,7 +831,7 @@ export class Renderer {
   frontPointers(c: Ctx, g: Simulation, fronts: FrontState[]) {
     if (!g.started || g.phase !== "assault") return;
     // Include half the badge width so it clears both HUD side panels.
-    const pad = Math.min(375, Math.max(180, this.w * 0.34), this.w / 2 - 90),
+    const pad = Math.min(120, this.w / 2 - 90),
       top = 122,
       bottom = this.h - 150;
     for (const f of fronts)

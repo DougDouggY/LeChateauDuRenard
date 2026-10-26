@@ -7,8 +7,7 @@ import "./style.css";
 import { Simulation } from "./simulation";
 import { Renderer } from "./renderer";
 import { UI } from "./ui";
-import { FLOOR_HEIGHT, insideFort } from "./map";
-import { distance } from "./types";
+import { FLOOR_HEIGHT, insideFort, elevation } from "./map";
 import type { Input } from "./types";
 const canvas = document.querySelector<HTMLCanvasElement>("#game")!;
 let game = new Simulation();
@@ -102,6 +101,7 @@ window.addEventListener("keydown", (e) => {
 });
 window.addEventListener("keyup", (e) => input.keys.delete(e.key.toLowerCase()));
 window.addEventListener("blur", () => {
+  game.cancelCharge();
   input.keys.clear();
   input.pressed.clear();
   input.down = false;
@@ -112,7 +112,7 @@ window.addEventListener("blur", () => {
     ui.drawOverlay();
   }
 });
-canvas.addEventListener("mousemove", (e) => {
+window.addEventListener("mousemove", (e) => {
   input.mouse = { x: e.clientX, y: e.clientY };
 });
 canvas.addEventListener("mousedown", (e) => {
@@ -127,6 +127,7 @@ canvas.addEventListener("mousedown", (e) => {
   }
 });
 window.addEventListener("mouseup", (e) => {
+  input.mouse = { x: e.clientX, y: e.clientY };
   if (e.button === 0) input.down = false;
 });
 canvas.addEventListener("contextmenu", (e) => {
@@ -155,16 +156,8 @@ function frame(now: number) {
   accumulator += delta;
   // Fixed simulation clock; the renderer never owns game state.
   const deckAim = renderer.world(input.mouse, FLOOR_HEIGHT);
-  let aim = insideFort(deckAim) ? deckAim : renderer.world(input.mouse);
-  const hovered = game.enemies.find((e) => {
-    const pos = renderer.screen(e);
-    return (
-      e.hp > 0 &&
-      distance({ x: pos.x, y: pos.y - 25 * renderer.zoom }, input.mouse) <
-        34 * renderer.zoom
-    );
-  });
-  if (hovered) aim = { x: hovered.x, y: hovered.y };
+  const aim = insideFort(deckAim) ? deckAim : renderer.world(input.mouse);
+  input.aimRay = renderer.world(input.mouse, elevation(game.player) + 25);
   let consumed = false;
   while (accumulator >= 1 / 60) {
     game.update(1 / 60, input, aim);
@@ -195,7 +188,7 @@ function frame(now: number) {
     tone(80, 0.2, "square", 0.015);
   }
   if ((game.started && !game.paused) || now - lastRender > 120) {
-    renderer.render(game, delta, aim);
+    renderer.render(game, delta, aim, input.mouse);
     lastRender = now;
   }
   ui.update(now);

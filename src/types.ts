@@ -25,6 +25,9 @@ export type PowerId =
   | "poison"
   | "lightning";
 export interface BowShot {
+  held?: boolean;
+  charge?: number;
+  manualAim?: boolean;
   target: Vec;
   lockId: number | null;
   power: PowerId | null;
@@ -89,6 +92,7 @@ export interface Ballista extends Vec {
   recoil: number;
 }
 export interface Projectile extends Vec {
+  manualAim?: boolean;
   power: PowerId | null;
   ownerId: number;
   effectDone: boolean;
@@ -122,6 +126,7 @@ export interface Pickup extends Vec {
   life: number;
 }
 export interface Input {
+  aimRay?: Vec;
   keys: Set<string>;
   pressed: Set<string>;
   mouse: Vec;
