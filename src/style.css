@@ -1372,3 +1372,64 @@ kbd {
     font-size: 25px;
   }
 }
+/* Archers, a shared level fighting deck, and the quartermaster's workshop. */
+.ammo-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 127px;
+  font-size: 8px;
+  line-height: 1.6;
+  color: #91a89c;
+  padding: 0 7px;
+}
+.ammo-tip kbd {
+  color: var(--gold);
+}
+.shop-points {
+  font:
+    500 24px "Cinzel",
+    Georgia,
+    serif;
+  color: var(--gold);
+  margin: 17px 0;
+}
+.shop-points span {
+  font:
+    9px "DM Sans",
+    sans-serif;
+  color: #8da79c;
+  letter-spacing: 0.5px;
+}
+.shop-section {
+  margin-top: 24px;
+  font-size: 8px !important;
+}
+.worker-status {
+  border-left: 2px solid #ba9e6d77;
+  padding-left: 11px;
+}
+.equipment-list {
+  margin-top: 12px;
+}
+.portrait img {
+  width: 220px;
+  left: -8px;
+  top: -3px;
+  clip-path: circle(20px at 29px 24px);
+}
+.portrait-1 img {
+  left: -8px;
+  top: -76px;
+  clip-path: circle(20px at 29px 97px);
+}
+.portrait-2 img {
+  left: -8px;
+  top: -149px;
+  clip-path: circle(20px at 29px 170px);
+}
+@media (max-width: 700px) {
+  .ammo-tip {
+    display: none;
+  }
+}

@@ -10,6 +10,9 @@ import {
   type EnemyKind,
   type Vec,
   type Upgrade,
+  type Stock,
+  type EquipmentKind,
+  type PurchaseKind,
   distance,
   toward,
   clamp,
@@ -22,9 +25,12 @@ import {
   elevation,
   segmentDistance,
   POSTS,
-  STOCKS,
+  SUPPLY_POSTS,
+  sideOf,
 } from "./map";
 import { updateAllies, updateEnemies } from "./strategy";
+import { Workshop } from "./workshop";
+import { projectileHeight } from "./combat";
 export class Simulation {
   time = 0;
   tick = 0;
@@ -42,7 +48,11 @@ export class Simulation {
   spawnLeft = 0;
   spawnTimer = 0;
   fronts: Side[] = [0];
-  resources = 110;
+  resources = 0;
+  stocks: Stock[] = [{ id: 0, x: 1320, y: 1130 }];
+  workshop = new Workshop(this);
+  placement: EquipmentKind | null = null;
+  shopRequested = false;
   kills = 0;
   paused = false;
   started = false;
@@ -100,6 +110,8 @@ export class Simulation {
       cooldown: 0,
       hurt: 0,
       walk: 0,
+      moving: false,
+      moveFacing: 0,
       facing: -1.57,
       dead: 0,
       weapon: 2,
@@ -113,31 +125,54 @@ export class Simulation {
       pathTime: 0,
       mounted: null,
       carried: null,
-      ammo: 12,
+      ammo: 24,
       attacking: 0,
     }));
-    this.ballistas = POSTS.map((p, i) => ({
+  }
+  installBallista(p: Vec) {
+    const side = sideOf(p);
+    const b: Ballista = {
       ...p,
-      id: i,
+      id: this.ballistas.length,
       hp: 300,
       maxHp: 300,
-      angle: [
-        -Math.PI / 2,
-        -Math.PI / 2,
-        0,
-        0,
-        Math.PI / 2,
-        Math.PI / 2,
-        Math.PI,
-        Math.PI,
-      ][i],
+      angle: [-Math.PI / 2, 0, Math.PI / 2, Math.PI][side],
       reload: 0,
       loaded: true,
       user: null,
       carrier: null,
       recoil: 0,
-    }));
+    };
+    this.ballistas.push(b);
+    return b;
   }
+  availableSites(kind: EquipmentKind): Vec[] {
+    const occupied = kind === "ballista" ? this.ballistas : this.stocks;
+    return (kind === "ballista" ? POSTS : SUPPLY_POSTS).filter(
+      (p) => !occupied.some((o) => distance(p, o) < 90),
+    );
+  }
+  requestPlacement(kind: EquipmentKind): boolean {
+    if (
+      !this.workshop.ready ||
+      this.resources < this.workshop.cost(kind) ||
+      !this.availableSites(kind).length
+    )
+      return false;
+    this.placement = kind;
+    this.notice(
+      "Choisissez un emplacement éclairé. Clic pour commander · Échap pour annuler.",
+    );
+    return true;
+  }
+  placeOrder(target: Vec): boolean {
+    if (!this.placement) return false;
+    const spot = this.availableSites(this.placement)
+      .filter((p) => distance(p, target) < 95)
+      .sort((a, b) => distance(a, target) - distance(b, target))[0];
+    return !!spot && this.workshop.order(this.placement, spot);
+  }
+
   get player() {
     return this.defenders[0];
   }
@@ -177,13 +212,7 @@ export class Simulation {
     if (e.hp <= 0) {
       e.dead = 0.7;
       this.kills++;
-      this.pickups.push({
-        id: this.nextId++,
-        ...{ x: e.x, y: e.y },
-        amount: e.kind === "brute" ? 16 : 7,
-        life: 100,
-      });
-      this.resources += 3;
+      this.resources += e.kind === "brute" ? 20 : 10;
     }
   }
   damageDefender(d: Defender, n: number) {
@@ -245,38 +274,18 @@ export class Simulation {
     }
     d.facing = Math.atan2(target.y - d.y, target.x - d.x);
     d.attacking = 0.25;
-    if (d.weapon === 1) {
-      d.cooldown = 0.42;
-      for (const e of this.enemies)
-        if (
-          e.hp > 0 &&
-          distance(d, e) < 100 &&
-          Math.cos(Math.atan2(e.y - d.y, e.x - d.x) - d.facing) > 0.1
-        )
-          this.damageEnemy(e, 48);
-      this.particlesAt(
-        { x: d.x + Math.cos(d.facing) * 45, y: d.y + Math.sin(d.facing) * 45 },
-        "#f0dda4",
-        4,
-      );
-    } else {
-      if (d.ammo <= 0) {
+    if (d.ammo <= 0) {
+      if (d.id === 0)
         this.notice(
-          "Plus de flèches : E près d’une réserve pour remplir le carquois.",
+          "Carquois vide : E près de la réserve centrale pour reprendre 24 flèches.",
         );
-        return;
-      }
-      d.ammo--;
-      d.cooldown = 0.62;
-      this.projectile(
-        d,
-        target,
-        28 + 10 * this.level("arrows"),
-        "ally",
-        "arrow",
-      );
+      return;
     }
+    d.ammo--;
+    d.cooldown = 0.62;
+    this.projectile(d, target, 28 + 10 * this.level("arrows"), "ally", "arrow");
   }
+
   projectile(
     from: Vec,
     to: Vec,
@@ -294,7 +303,7 @@ export class Simulation {
             : team === "enemy"
               ? 310
               : 630;
-    const life = team === "enemy" ? distance(from, to) / speed : 1.9;
+    const life = team === "enemy" ? distance(from, to) / speed : 2.6;
     this.projectiles.push({
       id: this.nextId++,
       x: from.x + dir.x * 25,
@@ -328,7 +337,11 @@ export class Simulation {
       this.notice("Vous quittez la baliste.");
       return;
     }
-    const stock = STOCKS.find((s) => distance(s, p) < 90);
+    if (this.workshop.ready && distance(p, this.workshop) < 105) {
+      this.shopRequested = true;
+      return;
+    }
+    const stock = this.stocks.find((s) => distance(s, p) < 90);
     if (stock) {
       p.ammo = 24;
       this.notice("Carquois rempli : 24 flèches.");
@@ -380,7 +393,7 @@ export class Simulation {
     p.mounted = null;
     p.carried = b.id;
     this.notice(
-      "Déplacez la baliste avec vous. E : déposer. Escaliers larges à l’est et à l’ouest.",
+      "Déplacez la baliste avec vous. E : déposer. Toute la plateforme est au même niveau.",
     );
   }
   repair(d: Defender, dt: number) {
@@ -399,15 +412,12 @@ export class Simulation {
     return true;
   }
   buy(id: string) {
+    if (!this.upgrades.some((u) => u.id === id)) return false;
+    return this.workshop.order(id as PurchaseKind);
+  }
+  applyUpgrade(id: string) {
     const u = this.upgrades.find((u) => u.id === id);
-    if (
-      !u ||
-      this.phase !== "preparation" ||
-      this.resources < u.cost ||
-      u.level >= 3
-    )
-      return false;
-    this.resources -= u.cost;
+    if (!u) return;
     u.level++;
     if (id === "walls")
       for (const w of this.walls) {
@@ -415,11 +425,10 @@ export class Simulation {
         w.hp = Math.min(w.maxHp, w.hp + 150);
       }
     u.cost = Math.ceil(u.cost * 1.5);
-    this.notice(`${u.name} — niveau ${u.level}`);
-    return true;
   }
   startWave() {
-    if (this.phase === "defeat") return;
+    if (this.phase !== "preparation" || this.workshop.busy || this.placement)
+      return;
     this.wave++;
     this.phase = "assault";
     this.spawnLeft = 9 + this.wave * 4;
@@ -471,6 +480,8 @@ export class Simulation {
       cooldown: 1 + Math.random(),
       hurt: 0,
       walk: 0,
+      moving: false,
+      moveFacing: 0,
       facing: 0,
       dead: 0,
       think: 0,
@@ -497,7 +508,9 @@ export class Simulation {
     );
     if (moved) {
       d.walk += (dt * speed) / 25;
-      d.facing = Math.atan2(dir.y, dir.x);
+      d.moving = true;
+      d.moveFacing = Math.atan2(dir.y, dir.x);
+      d.facing = d.moveFacing;
     } else d.pathTime = 0;
   }
   update(dt: number, input: Input, aim: Vec) {
@@ -509,6 +522,7 @@ export class Simulation {
     this.shake = Math.max(0, this.shake - dt * 20);
     const p = this.player;
     for (const d of this.defenders) {
+      d.moving = false;
       d.cooldown = Math.max(0, d.cooldown - dt);
       d.hurt = Math.max(0, d.hurt - dt);
       d.attacking = Math.max(0, d.attacking - dt);
@@ -527,8 +541,7 @@ export class Simulation {
     if (p.dead <= 0) {
       if (input.pressed.has("e")) this.interact();
       if (input.pressed.has("f")) this.carry();
-      if (input.pressed.has("1")) p.weapon = 1;
-      if (input.pressed.has("2")) p.weapon = 2;
+
       let dx =
         Number(input.keys.has("d") || input.keys.has("arrowright")) -
         Number(
@@ -571,7 +584,12 @@ export class Simulation {
           this.walls,
           p.carried !== null,
         );
-        if (dx || dy) p.walk += (dt * speed) / 25;
+        const traveled = distance(p, old);
+        if (traveled > 0.01) {
+          p.walk += traveled / 25;
+          p.moving = true;
+          p.moveFacing = Math.atan2(p.y - old.y, p.x - old.x);
+        }
         if (p.carried !== null) {
           const b = this.ballistas[p.carried];
           b.x = p.x;
@@ -581,7 +599,9 @@ export class Simulation {
       }
       p.facing = Math.atan2(aim.y - p.y, aim.x - p.x);
       if (p.mounted !== null) this.ballistas[p.mounted].angle = p.facing;
-      if (input.down || input.clicked) this.shoot(p, aim);
+      const placing = this.placement !== null;
+      if (placing && input.clicked) this.placeOrder(aim);
+      if (!placing && (input.down || input.clicked)) this.shoot(p, aim);
       if (input.keys.has("r") || input.pressed.has("r")) {
         if (p.mounted !== null) this.reload(p);
         else this.repair(p, dt);
@@ -598,6 +618,7 @@ export class Simulation {
       }
       if (b.hp <= 0 && b.user !== null) this.release(this.defenders[b.user]);
     }
+    this.workshop.update(dt);
     updateAllies(this, dt);
     updateEnemies(this, dt);
     for (const e of this.enemies) {
@@ -613,11 +634,7 @@ export class Simulation {
       q.y += q.vy * dt;
       q.life -= dt;
       if (q.team === "ally") {
-        const progress = clamp(1 - q.life / q.total, 0, 1),
-          z =
-            q.startZ * (1 - progress) +
-            q.endZ * progress +
-            Math.sin(progress * Math.PI) * 28;
+        const z = projectileHeight(q);
         if (
           z < 58 &&
           this.walls.some(
@@ -692,7 +709,8 @@ export class Simulation {
     this.pickups = this.pickups.filter((q) => q.life > 0);
     if (this.phase === "preparation") {
       this.remaining -= dt;
-      if (this.remaining <= 0) this.startWave();
+      if (this.remaining <= 0 && !this.workshop.busy && !this.placement)
+        this.startWave();
     } else {
       this.spawnTimer -= dt;
       if (this.spawnLeft > 0 && this.spawnTimer <= 0) {
@@ -702,14 +720,14 @@ export class Simulation {
       }
       if (this.spawnLeft === 0 && !this.enemies.some((e) => e.hp > 0)) {
         this.phase = "preparation";
-        this.remaining = 24;
+        this.remaining = 60;
+        this.workshop.arrive();
         this.resources += 45;
         for (const d of this.defenders) {
           d.hp = Math.min(d.maxHp, d.hp + 40);
-          d.ammo = 24;
         }
         this.notice(
-          `Vague ${this.wave} repoussée ! +45 bois · Améliorez vos défenses.`,
+          `Manche ${this.wave} repoussée ! +45 points · Retrouvez l’ouvrier au centre.`,
         );
       }
     }

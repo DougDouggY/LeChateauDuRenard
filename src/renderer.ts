@@ -7,7 +7,17 @@ import {
   type Wall,
   clamp,
 } from "./types";
-import { WORLD, FORT, POSTS, STOCKS, elevation } from "./map";
+import {
+  WORLD,
+  FORT,
+  POSTS,
+  FLOOR_HEIGHT,
+  CENTRAL_STAIR,
+  elevation,
+} from "./map";
+import { projectileHeight } from "./combat";
+import { archerFrame, ARCHER_ROWS } from "./animation";
+import type { Workshop } from "./workshop";
 type Ctx = CanvasRenderingContext2D;
 const P = (x: number, y: number, z = 0) => ({ x, y: y * 0.72 - z });
 function path(
@@ -95,6 +105,10 @@ export class Renderer {
   tileReady = false;
   ballistaAtlas = new Image();
   ballistaAtlasReady = false;
+  walkAtlas = new Image();
+  walkAtlasReady = false;
+  workerAtlas = new Image();
+  workerAtlasReady = false;
   lastTime = 0;
   constructor(public canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext("2d")!;
@@ -113,6 +127,10 @@ export class Renderer {
     this.tile.src = import.meta.env.BASE_URL + "assets/courtyard.png";
     this.ballistaAtlas.onload = () => (this.ballistaAtlasReady = true);
     this.ballistaAtlas.src = import.meta.env.BASE_URL + "assets/ballistas.png";
+    this.walkAtlas.onload = () => (this.walkAtlasReady = true);
+    this.walkAtlas.src = import.meta.env.BASE_URL + "assets/archers-walk.png";
+    this.workerAtlas.onload = () => (this.workerAtlasReady = true);
+    this.workerAtlas.src = import.meta.env.BASE_URL + "assets/worker-walk.png";
     this.resize();
   }
   resize() {
@@ -181,197 +199,83 @@ export class Renderer {
       ],
       "#354246",
     );
-    // Courtyard base and raised walkways.
+    // One continuous elevated fighting platform: no internal level changes.
+    const top = FORT.top * 0.72 - FLOOR_HEIGHT;
     polyWorld(
       c,
       [
-        [530, 490],
-        [1870, 490],
-        [1870, 1710],
-        [530, 1710],
+        [FORT.left, FORT.top],
+        [FORT.right, FORT.top],
+        [FORT.right, FORT.bottom],
+        [FORT.left, FORT.bottom],
       ],
-      "#4d5558",
-      "#17282e",
+      "#5e6c72",
+      "#243e49",
+      FLOOR_HEIGHT,
     );
     if (this.tileReady) {
       const pattern = c.createPattern(this.tile, "repeat")!;
       pattern.setTransform(new DOMMatrix().scale(0.5, 0.36));
       c.fillStyle = pattern;
-      c.fillRect(530, 490 * 0.72, 1340, 1220 * 0.72);
-      c.fillStyle = "#47647618";
-      c.fillRect(530, 490 * 0.72, 1340, 1220 * 0.72);
-    } else
-      for (let y = 500; y < 1720; y += 44)
-        for (let x = 530; x < 1870; x += 60) {
-          const offset = (Math.floor(y / 44) % 2) * 30;
-          const xx = x + offset;
-          if (xx > 1860) continue;
-          const v = Math.floor(75 + r() * 20);
-          polyWorld(
-            c,
-            [
-              [xx + 2, y + 2],
-              [xx + 56, y + 1],
-              [xx + 57, y + 40],
-              [xx + 2, y + 41],
-            ],
-            `rgb(${v},${v + 5},${v + 5})`,
-            "#38464b",
-          );
-          if (r() < 0.22) {
-            const p = P(xx + 20, y + 15);
-            line(c, [p.x, p.y], [p.x + 13, p.y + 9], "#39484b", 1);
-          }
-        }
-    // Interior garden islands leave wide combat routes.
-    for (const [x, y] of [
-      [900, 1030],
-      [1510, 1220],
-    ]) {
-      const p = P(x, y);
-      ellipse(c, p.x, p.y, 65, 42, "#283e3c", "#73796a", 5);
-      for (let j = 0; j < 22; j++) {
-        const a = r() * 6.28,
-          d = r() * 45;
-        ellipse(
-          c,
-          p.x + Math.cos(a) * d,
-          p.y + Math.sin(a) * d * 0.6,
-          9,
-          6,
-          ["#426253", "#354d41", "#50654c"][j % 3],
-          "#243c36",
-        );
-      }
-    }
-    // Broad, traversable stairs (east/west) and narrow stairs (north/south).
-    for (const s of [
-      { x: 1200, y: 640, vertical: true },
-      { x: 1200, y: 1560, vertical: true },
-      { x: 680, y: 1100, vertical: false },
-      { x: 1720, y: 1100, vertical: false },
-    ]) {
-      for (let i = 0; i < 9; i++) {
-        const z = i * 6,
-          x = s.vertical ? s.x - 66 : s.x - 44 + i * 10,
-          y = s.vertical ? s.y - 44 + i * 10 : s.y - 93;
-        polyWorld(
-          c,
-          [
-            [x, y],
-            [x + (s.vertical ? 132 : 11), y],
-            [x + (s.vertical ? 132 : 11), y + (s.vertical ? 11 : 186)],
-            [x, y + (s.vertical ? 11 : 186)],
-          ],
-          i % 2 ? "#788286" : "#8b9290",
-          "#3d5056",
-          z,
-        );
-      }
-    }
-    // Retaining walls along inner paths, respecting stair gaps.
-    const edges = [
-      [
-        [656, 616],
-        [1114, 616],
-      ],
-      [
-        [1286, 616],
-        [1744, 616],
-      ],
-      [
-        [656, 1584],
-        [1114, 1584],
-      ],
-      [
-        [1286, 1584],
-        [1744, 1584],
-      ],
-      [
-        [656, 616],
-        [656, 984],
-      ],
-      [
-        [656, 1216],
-        [656, 1584],
-      ],
-      [
-        [1744, 616],
-        [1744, 984],
-      ],
-      [
-        [1744, 1216],
-        [1744, 1584],
-      ],
-    ];
-    for (const [a, b] of edges) {
-      const pa = P(a[0], a[1]),
-        pb = P(b[0], b[1]);
-      path(
-        c,
-        [
-          [pa.x, pa.y],
-          [pb.x, pb.y],
-          [pb.x, pb.y - 24],
-          [pa.x, pa.y - 24],
-        ],
-        "#586973",
-        "#273e48",
+      c.fillRect(
+        FORT.left,
+        top,
+        FORT.right - FORT.left,
+        (FORT.bottom - FORT.top) * 0.72,
       );
-      line(c, [pa.x, pa.y - 24], [pb.x, pb.y - 24], "#99a3a1", 8);
     }
-    // Perimeter raised floor.
-    for (const rect of [
-      [530, 490, 1340, 126],
-      [530, 1584, 1340, 126],
-      [530, 616, 126, 968],
-      [1744, 616, 126, 968],
-    ]) {
-      const [x, y, w, h] = rect;
-      polyWorld(
-        c,
-        [
-          [x, y],
-          [x + w, y],
-          [x + w, y + h],
-          [x, y + h],
-        ],
-        "#657477",
-        "#30454d",
-        52,
-      );
-      if (this.tileReady) {
-        const pattern = c.createPattern(this.tile, "repeat")!;
-        pattern.setTransform(new DOMMatrix().scale(0.4, 0.288));
-        c.fillStyle = pattern;
-        c.fillRect(x, y * 0.72 - 52, w, h * 0.72);
-        c.fillStyle = "#8c9d9722";
-        c.fillRect(x, y * 0.72 - 52, w, h * 0.72);
-      } else
-        for (let yy = y; yy < y + h; yy += 38)
-          for (let xx = x; xx < x + w; xx += 55) {
-            const p = P(xx, yy, 52);
-            line(c, [p.x, p.y], [Math.min(x + w, xx + 52), p.y], "#85918e", 1);
-            line(c, [p.x, p.y], [p.x, p.y + 24], "#43575e", 1);
-          }
-    }
-    // Flags mark each cardinal entrance.
+    c.fillStyle = "#55768a12";
+    c.fillRect(
+      FORT.left,
+      top,
+      FORT.right - FORT.left,
+      (FORT.bottom - FORT.top) * 0.72,
+    );
+    // A flat inlaid border marks the patrol circuit without obstructing movement.
+    c.strokeStyle = "#a2a68955";
+    c.lineWidth = 3;
+    c.strokeRect(
+      FORT.left + 115,
+      top + 83,
+      FORT.right - FORT.left - 230,
+      (FORT.bottom - FORT.top) * 0.72 - 166,
+    );
     for (const [x, y, label] of [
-      [1200, 780, "N"],
-      [1560, 1100, "E"],
-      [1200, 1420, "S"],
-      [840, 1100, "O"],
+      [1200, 730, "NORD"],
+      [1620, 1100, "EST"],
+      [1200, 1470, "SUD"],
+      [780, 1100, "OUEST"],
     ] as const) {
-      const p = P(x, y);
-      c.save();
-      c.translate(p.x, p.y);
-      c.fillStyle = "#708080";
-      c.font = "bold 28px Georgia";
+      const p = P(x, y, FLOOR_HEIGHT);
+      c.font = "bold 15px Georgia";
       c.textAlign = "center";
-      c.globalAlpha = 0.38;
-      c.fillText(label, 0, 0);
-      c.restore();
+      c.fillStyle = "#a4b4ad55";
+      c.fillText(label, p.x, p.y);
     }
+    // Central access stairwell for the quartermaster. The rest of the deck is flat.
+    const stair = P(CENTRAL_STAIR.x, CENTRAL_STAIR.y, FLOOR_HEIGHT);
+    path(
+      c,
+      [
+        [stair.x - 55, stair.y - 37],
+        [stair.x + 55, stair.y - 37],
+        [stair.x + 55, stair.y + 39],
+        [stair.x - 55, stair.y + 39],
+      ],
+      "#10232c",
+      "#89928b",
+      7,
+    );
+    for (let i = 0; i < 7; i++) {
+      const yy = stair.y - 31 + i * 9;
+      c.fillStyle = `rgb(${49 + i * 5},${65 + i * 5},${74 + i * 4})`;
+      c.fillRect(stair.x - 47, yy, 94, 7);
+      line(c, [stair.x - 46, yy], [stair.x + 46, yy], "#a1a89a77", 1);
+    }
+    c.font = "10px sans-serif";
+    c.fillStyle = "#c2bea2";
+    c.textAlign = "center";
+    c.fillText("ESCALIER CENTRAL", stair.x, stair.y + 64);
     // A forest border with layered, illustrated evergreen silhouettes.
     for (let i = 0; i < 150; i++) {
       const x = r() * 2400,
@@ -465,16 +369,27 @@ export class Renderer {
         depth: pos[1] * 0.72 + 30,
         draw: () => this.tower(c, pos[0], pos[1], g.time),
       });
-    // Two courtyard buildings, kept outside the navigation corridors.
-    objects.push({
-      depth: 810 * 0.72,
-      draw: () => this.building(c, 1450, 790, g.time),
-    });
-    objects.push({ depth: 825 * 0.72, draw: () => this.well(c, 1000, 800) });
-    for (const s of STOCKS)
+    for (const site of g.availableSites("ballista"))
       objects.push({
-        depth: s.y * 0.72,
-        draw: () => this.stock(c, s.x, s.y, g.time),
+        depth: site.y * 0.72,
+        draw: () =>
+          this.slot(c, site, "ballista", g.placement === "ballista", aim),
+      });
+    if (g.placement === "stock")
+      for (const site of g.availableSites("stock"))
+        objects.push({
+          depth: site.y * 0.72,
+          draw: () => this.slot(c, site, "stock", true, aim),
+        });
+    for (const stock of g.stocks)
+      objects.push({
+        depth: stock.y * 0.72,
+        draw: () => this.stock(c, stock.x, stock.y, g.time),
+      });
+    if (g.workshop.state !== "hidden")
+      objects.push({
+        depth: g.workshop.y * 0.72,
+        draw: () => this.worker(c, g.workshop),
       });
     for (const b of g.ballistas)
       objects.push({
@@ -509,11 +424,7 @@ export class Renderer {
     for (const o of objects) o.draw();
     // Ballistic arcs are independent of wall collision, so bolts clear the parapets.
     for (const q of g.projectiles) {
-      const progress = clamp(1 - q.life / q.total, 0, 1),
-        z =
-          q.startZ * (1 - progress) +
-          q.endZ * progress +
-          Math.sin(progress * Math.PI) * (q.kind === "fire" ? 90 : 28),
+      const z = projectileHeight(q),
         pp = P(q.x, q.y, z),
         dir = Math.atan2(q.vy * 0.72, q.vx);
       c.save();
@@ -821,101 +732,8 @@ export class Renderer {
     ellipse(c, x - 4, y - 6, 1.5, 1.5, "#294457");
     ellipse(c, x + 4, y - 6, 1.5, 1.5, "#294457");
   }
-  building(c: Ctx, x: number, y: number, t: number) {
-    const p = P(x, y);
-    if (this.propsReady) {
-      this.prop(c, 2, p.x, p.y + 12, 232, 232);
-      return;
-    }
-    ellipse(c, p.x, p.y, 110, 42, "#243a3e");
-    path(
-      c,
-      [
-        [p.x - 85, p.y - 100],
-        [p.x + 75, p.y - 100],
-        [p.x + 75, p.y],
-        [p.x - 85, p.y],
-      ],
-      "#6e7168",
-      "#2c4148",
-      3,
-    );
-    for (let j = 0; j < 5; j++)
-      line(c, [p.x - 83, p.y - j * 20], [p.x + 72, p.y - j * 20], "#4c5c60", 2);
-    path(
-      c,
-      [
-        [p.x - 103, p.y - 98],
-        [p.x - 10, p.y - 174],
-        [p.x + 96, p.y - 100],
-      ],
-      "#2e4e63",
-      "#203744",
-      4,
-    );
-    for (let i = 0; i < 5; i++)
-      line(
-        c,
-        [p.x - 83 + i * 18, p.y - 110 - i * 13],
-        [p.x + 74 - i * 17, p.y - 110 - i * 13],
-        "#4a6b7c",
-        3,
-      );
-    c.fillStyle = "#3d332b";
-    c.fillRect(p.x - 18, p.y - 60, 42, 60);
-    for (let j = 0; j < 4; j++)
-      line(
-        c,
-        [p.x - 12 + j * 10, p.y - 57],
-        [p.x - 12 + j * 10, p.y],
-        "#85664a",
-        2,
-      );
-    for (const xx of [-59, 48]) {
-      c.fillStyle = "#f6b965";
-      c.fillRect(p.x + xx - 10, p.y - 65, 21, 31);
-      line(c, [p.x + xx, p.y - 65], [p.x + xx, p.y - 34], "#3c4441", 3);
-      line(
-        c,
-        [p.x + xx - 10, p.y - 50],
-        [p.x + xx + 11, p.y - 50],
-        "#3c4441",
-        3,
-      );
-      const glow = c.createRadialGradient(
-        p.x + xx,
-        p.y - 50,
-        2,
-        p.x + xx,
-        p.y - 50,
-        53,
-      );
-      glow.addColorStop(0, "#ffb75140");
-      glow.addColorStop(1, "#ffb75100");
-      c.fillStyle = glow;
-      c.fillRect(p.x + xx - 53, p.y - 103, 106, 106);
-    }
-    this.banner(c, p.x + 82, p.y - 40, "#44716e", t);
-  }
-  well(c: Ctx, x: number, y: number) {
-    const p = P(x, y);
-    ellipse(c, p.x, p.y, 50, 23, "#283e43");
-    c.fillStyle = "#788382";
-    c.fillRect(p.x - 40, p.y - 27, 80, 27);
-    ellipse(c, p.x, p.y - 2, 40, 18, "#788382", "#40545a", 3);
-    ellipse(c, p.x, p.y - 27, 44, 22, "#a1a698", "#3c535b", 3);
-    ellipse(c, p.x, p.y - 27, 31, 14, "#203d4b", "#5f767b", 3);
-    for (let i = 0; i < 5; i++)
-      line(
-        c,
-        [p.x - 35 + i * 17, p.y - 15],
-        [p.x - 35 + i * 17, p.y + 5],
-        "#4c6269",
-        2,
-      );
-  }
   stock(c: Ctx, x: number, y: number, t: number) {
-    const p = P(x, y);
+    const p = P(x, y, FLOOR_HEIGHT);
     c.save();
     c.translate(p.x, p.y);
     ellipse(c, 4, 8, 43, 17, "#263c3d");
@@ -1094,6 +912,95 @@ export class Renderer {
       c.fillRect(p.x - 30, p.y + 26, (60 * b.hp) / b.maxHp, 4);
     }
   }
+  slot(
+    c: Ctx,
+    site: Vec,
+    kind: "ballista" | "stock",
+    active: boolean,
+    aim: Vec,
+  ) {
+    const p = P(site.x, site.y, FLOOR_HEIGHT),
+      hover = active && Math.hypot(aim.x - site.x, aim.y - site.y) < 95;
+    c.save();
+    c.globalAlpha = active ? 1 : 0.65;
+    c.setLineDash([6, 5]);
+    ellipse(
+      c,
+      p.x,
+      p.y,
+      43,
+      27,
+      hover ? "#dbbc7438" : "#132a3630",
+      hover ? "#f2d8a0" : active ? "#cdb77b" : "#9aa99a",
+      active ? 2 : 1.5,
+    );
+    c.setLineDash([]);
+    line(c, [p.x - 9, p.y], [p.x + 9, p.y], active ? "#e7c486" : "#8b9d95", 2);
+    line(c, [p.x, p.y - 7], [p.x, p.y + 7], active ? "#e7c486" : "#8b9d95", 2);
+    if (active) {
+      c.fillStyle = hover ? "#f5dba5" : "#aabdac";
+      c.font = "bold 10px sans-serif";
+      c.textAlign = "center";
+      c.fillText(
+        kind === "ballista" ? "BALISTE · 90 PTS" : "RÉSERVE · 40 PTS",
+        p.x,
+        p.y + 46,
+      );
+    }
+    c.restore();
+  }
+  worker(c: Ctx, w: Workshop) {
+    const p = P(w.x, w.y, FLOOR_HEIGHT),
+      frame = w.moving ? Math.floor(w.walk) % 4 : 0;
+    c.save();
+    c.translate(p.x, p.y + (1 - w.emergence) * 60);
+    c.globalAlpha = w.emergence;
+    ellipse(c, 0, 0, 23, 9, "#10242ba0");
+    if (this.workerAtlasReady) {
+      c.save();
+      if (Math.cos(w.facing) < 0) c.scale(-1, 1);
+      c.drawImage(
+        this.workerAtlas,
+        (frame * this.workerAtlas.width) / 4,
+        0,
+        this.workerAtlas.width / 4,
+        this.workerAtlas.height,
+        -46,
+        -121,
+        92,
+        121,
+      );
+      c.restore();
+    } else {
+      c.fillStyle = "#b38d5f";
+      c.fillRect(-17, -64, 34, 61);
+      ellipse(c, 0, -81, 16, 18, "#d2a079", "#213945", 3);
+    }
+    c.textAlign = "center";
+    c.font = "bold 11px sans-serif";
+    c.fillStyle = "#edd29b";
+    c.fillText("Gaspard · Ouvrier", 0, -139);
+    if (w.state === "building" && w.job) {
+      c.fillStyle = "#142a32";
+      c.fillRect(-35, -132, 70, 5);
+      c.fillStyle = "#e0bd7d";
+      c.fillRect(-35, -132, 70 * (1 - w.job.build / 1.3), 5);
+    }
+    if (w.ready && w.speech > 0) {
+      c.fillStyle = "#0d202bf2";
+      c.strokeStyle = "#d0b47b88";
+      c.lineWidth = 1;
+      c.beginPath();
+      c.roundRect(-175, -208, 350, 55, 7);
+      c.fill();
+      c.stroke();
+      c.fillStyle = "#e5d4b1";
+      c.font = "12px sans-serif";
+      c.fillText("« Dites-moi de quoi vous avez besoin,", 0, -187);
+      c.fillText("je vous prépare ça rapidement ! »", 0, -169);
+    }
+    c.restore();
+  }
   actor(c: Ctx, a: Defender | Enemy, t: number, player: boolean) {
     const ally = "weapon" in a,
       p = P(a.x, a.y, elevation(a));
@@ -1103,7 +1010,7 @@ export class Renderer {
       c.globalAlpha = 0.45;
       c.rotate(Math.PI / 2);
     }
-    const bob = Math.sin(a.walk * 2) * 2;
+    const bob = ally ? 0 : Math.sin(a.walk * 2) * 2;
     ellipse(c, 2, 2, ally ? 21 : 18, 8, "#102b31aa");
     if (ally) {
       ellipse(
@@ -1123,7 +1030,26 @@ export class Renderer {
       }
     }
     if (a.hurt > 0) c.filter = "brightness(1.7) sepia(.3)";
-    if (this.atlasReady) {
+    if (ally && this.walkAtlasReady) {
+      const frame = archerFrame(a),
+        row = ARCHER_ROWS[a.id];
+      c.save();
+      const facing = a.moving ? a.moveFacing : a.facing;
+      if (Math.cos(facing) < -0.05) c.scale(-1, 1);
+      if (a.dodge > 0) c.rotate(0.28);
+      c.drawImage(
+        this.walkAtlas,
+        (frame * this.walkAtlas.width) / 4,
+        (row.y * this.walkAtlas.height) / 1254,
+        this.walkAtlas.width / 4,
+        (row.h * this.walkAtlas.height) / 1254,
+        -49,
+        -130,
+        98,
+        130,
+      );
+      c.restore();
+    } else if (this.atlasReady) {
       const index = ally
         ? a.id
         : { goblin: 3, skeleton: 4, fire: 5, runner: 6, brute: 7 }[a.kind];
@@ -1148,22 +1074,29 @@ export class Renderer {
       c.restore();
     } else this.fallbackActor(c, a, bob);
     c.filter = "none";
-    if (ally && a.attacking > 0 && a.weapon === 1) {
+    if (ally && a.attacking > 0 && a.mounted === null) {
       c.save();
+      c.translate(0, -60);
       c.scale(1, 0.72);
       c.rotate(a.facing);
-      c.beginPath();
-      c.arc(0, 0, 76, -0.8, 0.8);
-      c.strokeStyle = "#f5dfb5";
-      c.lineWidth = 5;
-      c.globalAlpha = a.attacking / 0.25;
-      c.stroke();
+      line(c, [12, 0], [55, 0], "#e6d2a6", 2);
+      path(
+        c,
+        [
+          [61, 0],
+          [52, -4],
+          [52, 4],
+        ],
+        "#d4e1dc",
+        "",
+        0,
+      );
       c.restore();
     }
     const labelY = this.atlasReady
       ? !ally && a.kind === "brute"
         ? -154
-        : -134
+        : -145
       : -85;
     if (a.hp < a.maxHp || ally) {
       c.fillStyle = "#172c35";
@@ -1282,7 +1215,7 @@ export class Renderer {
     line(c, [-2, -47], [5, -47], "#775346", 1.5);
     line(c, [-13, -38], [-25, -24], color, 8);
     line(c, [13, -38], [25, -27], color, 8);
-    if ((ally && a.weapon === 1) || (!ally && a.kind === "brute")) {
+    if (!ally && a.kind === "brute") {
       line(c, [23, -24], [35, -62], "#d6dcce", 5);
       line(c, [20, -34], [32, -31], "#ba915d", 4);
       path(

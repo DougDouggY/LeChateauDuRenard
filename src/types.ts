@@ -10,13 +10,15 @@ export interface Actor extends Vec {
   cooldown: number;
   hurt: number;
   walk: number;
+  moving: boolean;
+  moveFacing: number;
   facing: number;
   dead: number;
 }
 export interface Defender extends Actor {
   name: string;
   color: string;
-  weapon: 1 | 2;
+  weapon: 2;
   dodge: number;
   dashX: number;
   dashY: number;
@@ -109,3 +111,16 @@ export const toward = (a: Vec, b: Vec) => {
   const d = distance(a, b) || 1;
   return { x: (b.x - a.x) / d, y: (b.y - a.y) / d };
 };
+
+export interface Stock extends Vec {
+  id: number;
+}
+export type EquipmentKind = "ballista" | "stock";
+export type PurchaseKind =
+  EquipmentKind | "power" | "reload" | "walls" | "arrows" | "repair";
+export interface Delivery {
+  kind: PurchaseKind;
+  target: Vec;
+  cost: number;
+  build: number;
+}

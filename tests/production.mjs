@@ -54,7 +54,9 @@ try {
       window.__renderer?.atlasReady &&
       window.__renderer?.propsReady &&
       window.__renderer?.tileReady &&
-      window.__renderer?.ballistaAtlasReady,
+      window.__renderer?.ballistaAtlasReady &&
+      window.__renderer?.walkAtlasReady &&
+      window.__renderer?.workerAtlasReady,
   );
   await page.getByRole("button", { name: "Prendre la garde" }).click();
   await page.waitForFunction(

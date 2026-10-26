@@ -1,87 +1,96 @@
 # Le Château du Renard — La dernière veille
 
-Prototype vertical de défense de château, jouable sur ordinateur dans un navigateur. Un chevalier humain et deux compagnons autonomes défendent quatre fronts. Le jeu est implémenté en TypeScript et Canvas 2D, avec Vite. Il n’utilise pas Phaser : la simulation, les collisions, la navigation et le rendu sont de petits modules séparés et inspectables.
+Jeu de défense de château sur navigateur de bureau, en TypeScript / Canvas 2D avec Vite. Version 0.2 : trois archers, une plateforme entièrement au niveau des remparts, et un ouvrier qui livre les équipements achetés entre les manches.
 
-## Démarrer
+**Jouer : https://dougdouggy.github.io/LeChateauDuRenard/**
 
-Prérequis : Node.js 22.12+ (validé ici avec Node 24) et npm. Aucun compte, secret, service distant ou base de données n’est nécessaire. Les images et polices sont servies localement.
+## Hébergement et gratuité
+
+Cette configuration utilise GitHub Pages sur un dépôt public et des exécuteurs GitHub Actions standards. Ces services sont gratuits dans cette configuration, sans essai de 30 jours ni abonnement à activer. Le site reste accessible entre les déploiements : aucun workflow ne tourne en continu pour permettre de jouer. Un workflow ne démarre que lors d’un push sur `main` ou d’un lancement manuel.
+
+L’encart d’essai de 30 jours proposé par GitHub concerne des offres payantes telles qu’Enterprise/Copilot, qui ne sont pas requises ici. Cette affirmation concerne les offres actuelles, dans les limites d’usage du service ; elle n’est pas une promesse que GitHub ne changera jamais ses conditions. Voir [les offres GitHub](https://github.com/pricing).
+
+Le premier déploiement public de la version 0.1 a été vérifié : HTTPS 200 et fichiers identiques au bundle testé. Le workflow dans `.github/workflows/deploy.yml` teste et publie les versions suivantes automatiquement. Dans **Settings → Pages → Source**, conserver **GitHub Actions**.
+
+## Démarrer en local
+
+Node.js 22.12+ et npm ; validation avec Node 24. Aucun compte, clé d’API, base de données ou serveur de jeu distant n’est nécessaire. Les images et les polices sont locales.
 
 ```sh
 npm ci
 npm run dev -- --port 5173
 ```
 
-Ouvrir le serveur Vite dans un navigateur de bureau et choisir **Prendre la garde**. Une préparation de 25 secondes précède la première vague. L’atelier permet de déclencher l’assaut plus tôt.
+Puis choisir **Prendre la garde** dans le jeu.
 
 ```sh
-npm run build          # Vérification TypeScript et bundle de production
-npm test               # Tests de simulation, sans navigateur
-npm run test:browser   # Tests d’interactions dans Chromium et captures réelles
-npm run preview        # Servir le bundle de production après build
+npm test                 # Tests de simulation : gameplay, marche, commandes et livraisons
+npm run build            # Vérification TypeScript et bundle de production
+npm run test:browser     # Parcours fonctionnel complet dans Chromium
+npm run test:production  # Bundle réel testé sous /LeChateauDuRenard/
+npm run preview          # Servir le bundle de production
 ```
 
-Les tests navigateur démarrent et arrêtent leur propre serveur sur le port 5174. Ils attendent Chromium à `/usr/bin/chromium` ; `CHROMIUM_PATH` permet de choisir un autre exécutable installé. Les captures et résultats courants sont écrits dans `artifacts/` (ignoré par Git). Le mode `?test` expose des accès de diagnostic destinés exclusivement aux tests ; ils ne sont pas présents en jeu normal.
+Les tests navigateur utilisent Chromium à `/usr/bin/chromium` (ou `CHROMIUM_PATH`). Le parcours fonctionnel démarre son propre serveur sur le port 5174 et l’arrête ensuite. Les captures réelles et les résultats sont dans `artifacts/`, ignoré par Git. Le paramètre `?test` expose l’état de diagnostic destiné aux tests ; il est absent du mode de jeu normal.
+
+## Commencer simplement, s’équiper ensuite
+
+Au départ : **trois archers avec chacun 24 flèches, une seule réserve centrale, zéro baliste et zéro point**. Huit marques de placement indiquent les futurs emplacements de balistes. Il n’y a ni bâtiment, ni jardin, ni séparation de niveau dans l’espace de combat. La plateforme entière est à la hauteur des remparts : les flèches peuvent franchir les parapets depuis tout l’intérieur.
+
+Les archers défendent contre les gobelins et squelettes tireurs, les lanceurs incendiaires, les diablotins rapides et les brutes. Les tireurs approchent puis s’arrêtent pour attaquer à distance. Les unités de mêlée attaquent les portes et entrent après une brèche. Les impacts, collisions, dégâts et morts sont réels.
+
+Chaque élimination rapporte immédiatement **10 points**, ou **20 pour une brute**. Finir une manche ajoute **45 points**. Les points sont partagés par la garde ; les réparations et rechargements des balistes achetées peuvent également en consommer.
+
+Après chaque manche, une pause de **60 secondes** permet de s’équiper. **Gaspard, l’ouvrier**, monte par l’escalier central et dit : « Dites-moi de quoi vous avez besoin, je vous prépare ça rapidement ! » Approcher et appuyer sur **E**, ou ouvrir son catalogue avec **B**.
+
+- **Baliste mobile — 90 points** : choisir un emplacement marqué ; Gaspard revient à l’escalier, apporte la caisse, installe l’arme puis retourne au comptoir. Elle apparaît seulement après livraison.
+- **Réserve de flèches — 40 points** : choisir l’un des quatre points de ravitaillement supplémentaires ; elle devient utilisable après la même livraison.
+- **Améliorations** : puissance et recharge des balistes, flèches, murs et réparations. Leur effet est appliqué à la livraison, pas au clic d’achat.
+
+Une seule commande est traitée à la fois. Les points sont débités une seule fois, à la validation d’un emplacement valable ou d’une amélioration. Annuler le choix d’un emplacement ne coûte rien. Une livraison active et le retour de l’ouvrier se terminent avant le prochain assaut, même si le compte à rebours expire. Gaspard repart par l’escalier au début de la manche suivante.
+
+Les réserves remplissent gratuitement le carquois à 24 flèches. Les alliés vont se réapprovisionner seuls lorsqu’ils sont à sec. En début de partie, ils combattent à l’arc ; ils peuvent servir les balistes une fois achetées. Les fronts, les armes et les commandes sont réservés pour éviter que les deux compagnons se disputent le même poste.
 
 ## Commandes
 
-| Action                                   | Commande                                                  |
-| ---------------------------------------- | --------------------------------------------------------- |
-| Déplacement                              | ZQSD, WASD ou flèches                                     |
-| Visée / attaque                          | Souris / clic gauche ; maintenir pour enchaîner           |
-| Épée / arc                               | 1 / 2                                                     |
-| Esquive                                  | Espace ; recharge de 1,5 seconde                          |
-| Prendre / quitter une baliste            | E à proximité                                             |
-| Recharger la baliste                     | R ; coûte 2 bois                                          |
-| Transporter la baliste utilisée          | F ; E pour la déposer                                     |
-| Réparer un mur, une porte ou une baliste | Maintenir R à pied et à proximité                         |
-| Remplir le carquois                      | E près d’une réserve de flèches                           |
-| Ordres individuels aux compagnons        | Tab, puis ordre et front pour chacun                      |
-| Améliorations                            | B ; disponibles entre les vagues                          |
-| Aide / pause                             | H / Échap                                                 |
-| Zoom                                     | Molette                                                   |
-| Sons                                     | Bouton musical en haut à droite ; désactivés initialement |
+| Action                                | Commande                                                      |
+| ------------------------------------- | ------------------------------------------------------------- |
+| Déplacement                           | ZQSD, WASD ou flèches                                         |
+| Viser / tirer à l’arc                 | Souris / clic gauche, maintenir pour enchaîner                |
+| Esquive                               | Espace                                                        |
+| Reprendre 24 flèches                  | E près d’une réserve                                          |
+| Parler à Gaspard                      | E près de lui entre les manches                               |
+| Catalogue de l’ouvrier                | B                                                             |
+| Choisir l’emplacement d’un achat      | Clic sur une marque éclairée                                  |
+| Annuler le choix sans payer           | Échap ou clic droit                                           |
+| Prendre / quitter une baliste achetée | E                                                             |
+| Recharger une baliste                 | R ; 2 points                                                  |
+| Transporter / déposer une baliste     | F quand on la sert / E                                        |
+| Réparer                               | Maintenir R à pied près d’une structure ; consomme des points |
+| Ordres individuels aux compagnons     | Tab                                                           |
+| Aide / pause                          | H / Échap                                                     |
+| Zoom                                  | Molette                                                       |
 
-## Boucle de jeu réellement implémentée
+Les personnages à terre reviennent après 12 secondes. La partie est perdue si tous les défenseurs sont simultanément à terre ou si l’intégrité passe sous 12 %. Vagues infinies, aucun boss. La première manche attaque au nord, la deuxième à l’est et à l’ouest, puis les fronts se combinent.
 
-- Château de 1340 × 1220 unités dans une carte de 2400 × 2200 unités, cour, quatre chemins de ronde, quatre escaliers et huit balistes. Les petits murs intérieurs imposent le passage par les escaliers. Les balistes transportées ne peuvent emprunter que les escaliers larges est et ouest.
-- Déplacements normalisés, collision segmentée sans traversée des murs à grande vitesse, obstacles de décor, caméra lissée et mini-carte des trois défenseurs, des ennemis, des brèches et du champ de vision.
-- Épée en éventail, arc à munitions, esquive avec invulnérabilité courte et délai de recharge. Les projectiles infligent de vrais dégâts avec détection continue du segment parcouru.
-- Balistes avec orientation dans huit directions illustrées, carreaux perforants, recul, rechargement manuel ou autonome, points de vie, transport et dépôt. Les projectiles suivent une hauteur visuelle : un tir depuis les remparts franchit le mur, une flèche trop basse depuis la cour est arrêtée.
-- Gobelins archers, squelettes archers, lanceurs incendiaires, diablotins rapides et brutes résistantes. Les unités de tir approchent puis s’arrêtent pour lancer des projectiles ; les unités de mêlée attaquent la porte et peuvent entrer après une brèche.
-- Compagnons avec cheminement A*, répartition des fronts, réservation des armes, tir, rechargement, gestion des flèches, mêlée et réparation. Les ordres suivre / défendre un front / réparer / servir une baliste sont individuels. En autonomie, un seul compagnon privilégie l’entretien pendant une petite attaque, l’autre conserve la pression de tir.
-- Bois ramassable sur les ennemis et prime de vague ; réparation progressive, reconstruction de sections détruites et cinq améliorations à trois niveaux.
-- Vagues infinies, pauses de 24 secondes, attaques successivement au nord, est/ouest, puis sur plusieurs fronts. Aucun boss. Les défenseurs à terre se relèvent après 12 secondes. Défaite si les trois sont simultanément à terre ou si l’intégrité totale descend sous 12 %.
+## Architecture et assets
 
-## Architecture
+| Module              | Rôle                                                                         |
+| ------------------- | ---------------------------------------------------------------------------- |
+| `src/simulation.ts` | État de partie, arcs, munitions, dégâts, points, vagues et placement         |
+| `src/workshop.ts`   | Arrivée de l’ouvrier, commandes, trajet de livraison, installation et départ |
+| `src/map.ts`        | Plateau surélevé continu, remparts, emplacements, collisions et A*           |
+| `src/strategy.ts`   | Compagnons archers et comportements des ennemis                              |
+| `src/combat.ts`     | Hauteur de projectile commune au rendu et aux collisions                     |
+| `src/animation.ts`  | Cycle de marche commandé par la distance réellement parcourue                |
+| `src/renderer.ts`   | Projection trois-quarts, sprites, terrain, torches, effets et mini-carte     |
+| `src/ui.ts`         | HUD, catalogue de Gaspard, ordres, aide et écrans                            |
+| `src/main.ts`       | Entrées, boucle fixe 60 Hz et sons synthétiques                              |
 
-| Module              | Responsabilité                                                                                              |
-| ------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `src/types.ts`      | État sérialisable des entités, commandes et types                                                           |
-| `src/map.ts`        | Carte, élévation, obstacles, collisions, navigation A*                                                      |
-| `src/simulation.ts` | État de partie, combat, armes, dégâts, réparation, améliorations, vagues                                    |
-| `src/strategy.ts`   | Décisions et déplacements des compagnons et ennemis                                                         |
-| `src/renderer.ts`   | Projection trois-quarts, tri en profondeur, sprites, terrain mis en cache, éclairages, effets et mini-carte |
-| `src/ui.ts`         | HUD, atelier, ordres, aide et écrans de partie                                                              |
-| `src/main.ts`       | Entrées, boucle à pas fixe de 60 Hz, sons et orchestration                                                  |
+Les trois défenseurs possèdent de nouveaux sprites d’archers sans épée ni bouclier. Chaque archer dispose de **quatre poses de marche réellement distinctes** dans `public/assets/archers-walk.png`. Le cycle avance avec le déplacement réel et s’arrête lorsqu’on lâche les touches, rencontre un mur, sert une baliste ou tombe à terre. Gaspard dispose également de quatre images de marche avec sa caisse.
 
-La simulation ne dépend ni du DOM ni du rendu, ce qui permet les tests sans navigateur et une évolution vers un serveur autoritaire. **Le multijoueur n’est pas implémenté** : protocole de commandes par joueur, synchronisation, reconnexion et gestion du hasard restent à construire. Le moteur ne prétend pas fournir dès maintenant une simulation réseau déterministe.
+Les images ont été produites pour ce prototype avec l’outil de génération d’images, dans la direction de la référence fournie, et sont utilisées dans le jeu. Elles ne sont pas présentées comme une capture conceptuelle remplaçant un jeu jouable. Cinzel et DM Sans sont servies localement via Fontsource, avec leurs licences incluses.
 
-## Graphismes et limites de cette version
+Limites artistiques : les cycles illustrés montrent une vue trois-quarts commune, avec symétrie horizontale ; ce ne sont pas huit animations directionnelles complètes. Attaques, esquives, dégâts et morts gardent des effets procéduraux. Les balistes ont huit orientations, mais pas encore un atlas séparé pour chaque état de charge. Le terrain, les murs et les réserves combinent textures et dessin Canvas. La fidélité exacte à la référence, le son final et l’équilibrage de longues parties restent à améliorer.
 
-Les atlas dans `public/assets/` ont été produits pour ce prototype avec un outil de génération d’images, dans la direction donnée par la référence fournie. Ils sont utilisés dans le jeu : il ne s’agit pas d’une illustration conceptuelle présentée comme une capture jouable. Le terrain, les murs, les escaliers, les réserves et les effets combinent ces images avec du dessin Canvas. Les polices Cinzel et DM Sans sont fournies par les paquets Fontsource (licences incluses dans ces paquets).
-
-Le rendu est une projection 2D trois-quarts stylisée avec élévation des chemins de ronde ; ce n’est pas une reconstruction exacte du château de l’image. Les contours des murs, réserves et escaliers sont encore procéduraux, moins riches que les sprites illustrés.
-
-Les animations sont procédurales (balancement de marche, orientation, esquive, recul, arc d’épée, dégâts, chute, particules et torches). **Il n’y a pas encore de planches dessinées image par image pour toutes les actions et orientations.** Les poses des personnages gardent les armes de leur illustration, même lorsque l’arme logique change. L’arc d’épée et les vrais projectiles indiquent l’action courante. L’atlas illustré des balistes représente une arme chargée ; le désarmement est indiqué par l’état assombri, le message et la barre de recharge plutôt que par une nouvelle pose dessinée.
-
-Pour une finition proche de la référence, produire par un illustrateur ou un pipeline d’animation : huit orientations de chaque personnage, cycles de marche/course, attaques épée/arc, roulade, dégâts et mort ; variantes de balistes vides/chargées et treuil animé ; kit modulaire de murs, portes, escaliers, réparations et destructions ; sons de pas, armes, impacts et ambiance. Les petites tonalités synthétiques actuelles sont fonctionnelles, pas un habillage sonore final.
-
-L’équilibrage de parties longues, l’accessibilité complète et les appareils tactiles restent hors de cette première validation. Les sprites changent de sens et bougent, mais une finition artistique complète reste nécessaire. La capacité des IA à survivre seules indéfiniment n’est pas garantie : le joueur doit défendre activement.
-
-## Déploiement public
-
-Le workflow `.github/workflows/deploy.yml` construit, teste et publie le jeu avec GitHub Pages à chaque push sur `main`, ainsi que sur déclenchement manuel. Dans les réglages GitHub du dépôt, **Pages → Build and deployment → Source** doit être **GitHub Actions**. Si le premier workflow a démarré avant cette activation, le relancer depuis l’onglet Actions.
-
-L’adresse attendue après un déploiement réussi est `https://dougdouggy.github.io/LeChateauDuRenard/`. Sa présence dans cette documentation ne signifie pas que l’activation ou la publication distante a été vérifiée. L’état du workflow et une requête HTTP publique permettent de le confirmer.
-
-Les chemins relatifs de Vite et des images permettent un hébergement à la racine ou dans un sous-répertoire. Aucun secret de déploiement n’est stocké dans les fichiers ; le workflow utilise le jeton éphémère GitHub Actions, avec permissions Pages limitées au job de déploiement.
+Le multijoueur n’est pas implémenté. Les modules de simulation indépendants du DOM permettent son évolution, mais protocole réseau, serveur autoritaire, reconnexion et synchronisation restent à construire.

@@ -7,7 +7,7 @@ import "./style.css";
 import { Simulation } from "./simulation";
 import { Renderer } from "./renderer";
 import { UI } from "./ui";
-import { elevation } from "./map";
+import { FLOOR_HEIGHT, insideFort } from "./map";
 import { distance } from "./types";
 import type { Input } from "./types";
 const canvas = document.querySelector<HTMLCanvasElement>("#game")!;
@@ -87,7 +87,12 @@ window.addEventListener("keydown", (e) => {
   if (!input.keys.has(k)) input.pressed.add(k);
   input.keys.add(k);
   if (e.repeat) return;
-  if (k === "escape") ui.togglePause();
+  if (k === "escape") {
+    if (game.placement) {
+      game.placement = null;
+      game.notice("Choix d’emplacement annulé. Aucun point dépensé.");
+    } else ui.togglePause();
+  }
   if (k === "tab") ui.toggleOrders();
   if (k === "b") ui.toggleShop();
   if (k === "h") ui.toggleHelp();
@@ -113,7 +118,10 @@ canvas.addEventListener("mousedown", (e) => {
   }
 });
 window.addEventListener("mouseup", () => (input.down = false));
-canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+canvas.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+  game.placement = null;
+});
 canvas.addEventListener(
   "wheel",
   (e) => {
@@ -133,8 +141,8 @@ function frame(now: number) {
   last = now;
   accumulator += delta;
   // Fixed simulation clock; the renderer never owns game state.
-  let aim = renderer.world(input.mouse);
-  aim = renderer.world(input.mouse, elevation(aim));
+  const deckAim = renderer.world(input.mouse, FLOOR_HEIGHT);
+  let aim = insideFort(deckAim) ? deckAim : renderer.world(input.mouse);
   const hovered = game.enemies.find((e) => {
     const pos = renderer.screen(e);
     return (

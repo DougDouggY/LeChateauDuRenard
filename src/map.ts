@@ -7,18 +7,32 @@ export const FORT = {
   bottom: 1710,
   band: 126,
 };
-export const STAIRS = [
-  { x: 1200, y: 656, side: 0 },
-  { x: 1704, y: 1100, side: 1 },
-  { x: 1200, y: 1544, side: 2 },
-  { x: 696, y: 1100, side: 3 },
+export const FLOOR_HEIGHT = 52;
+export const CENTRAL_STAIR: Vec = { x: 1200, y: 1130 };
+export const WORKSHOP_COUNTER: Vec = { x: 1200, y: 1000 };
+export const SUPPLY_POSTS: Vec[] = [
+  { x: 1200, y: 740 },
+  { x: 1610, y: 1100 },
+  { x: 1200, y: 1460 },
+  { x: 790, y: 1100 },
 ];
-export const STOCKS = [
-  { x: 840, y: 840 },
-  { x: 1560, y: 840 },
-  { x: 840, y: 1360 },
-  { x: 1560, y: 1360 },
-];
+export function insideFort(p: Vec): boolean {
+  return (
+    p.x >= FORT.left &&
+    p.x <= FORT.right &&
+    p.y >= FORT.top &&
+    p.y <= FORT.bottom
+  );
+}
+export function sideOf(p: Vec): Side {
+  const distances = [
+    Math.abs(p.y - FORT.top),
+    Math.abs(p.x - FORT.right),
+    Math.abs(p.y - FORT.bottom),
+    Math.abs(p.x - FORT.left),
+  ];
+  return distances.indexOf(Math.min(...distances)) as Side;
+}
 export const POSTS: Vec[] = [
   { x: 970, y: 552 },
   { x: 1430, y: 552 },
@@ -56,56 +70,27 @@ export function makeWalls(): Wall[] {
   return a;
 }
 export function elevation(p: Vec): number {
-  const d = Math.min(p.x - 530, 1870 - p.x, p.y - 490, 1710 - p.y);
-  if (d < 0) return 0;
-  return 52 * clamp((174 - d) / 48, 0, 1);
+  return insideFort(p) ? FLOOR_HEIGHT : 0;
 }
 export function blocked(
   p: Vec,
   r: number,
   walls: Wall[],
-  large = false,
+  _large = false,
 ): boolean {
-  if (p.x < 40 + r || p.y < 40 + r || p.x > 2360 - r || p.y > 2160 - r)
+  if (
+    p.x < 40 + r ||
+    p.y < 40 + r ||
+    p.x > WORLD.w - 40 - r ||
+    p.y > WORLD.h - 40 - r
+  )
     return true;
-  if (p.x > 1370 - r && p.x < 1535 + r && p.y > 720 - r && p.y < 815 + r)
-    return true;
-  for (const o of [
-    { x: 1000, y: 800, r: 43 },
-    { x: 900, y: 1030, r: 60 },
-    { x: 1510, y: 1220, r: 60 },
-  ])
-    if (distance(p, o) < o.r + r) return true;
-  for (const w of walls)
-    if (
+  return walls.some(
+    (w) =>
       w.hp > 0 &&
       Math.abs(p.x - w.x) < w.w / 2 + r &&
-      Math.abs(p.y - w.y) < w.h / 2 + r
-    )
-      return true;
-  // Low inner retaining walls force defenders through the four real stairways.
-  const inner = { l: 656, r: 1744, t: 616, b: 1584 };
-  const stairWidth = large ? 0 : 76;
-  if (p.x > inner.l - r && p.x < inner.r + r) {
-    if (
-      (Math.abs(p.y - inner.t) < 14 + r || Math.abs(p.y - inner.b) < 14 + r) &&
-      Math.abs(p.x - 1200) > stairWidth
-    )
-      return true;
-    if (
-      large &&
-      (Math.abs(p.y - inner.t) < 14 + r || Math.abs(p.y - inner.b) < 14 + r)
-    )
-      return true;
-  }
-  if (p.y > inner.t - r && p.y < inner.b + r) {
-    if (
-      (Math.abs(p.x - inner.l) < 14 + r || Math.abs(p.x - inner.r) < 14 + r) &&
-      Math.abs(p.y - 1100) > 104
-    )
-      return true;
-  }
-  return false;
+      Math.abs(p.y - w.y) < w.h / 2 + r,
+  );
 }
 export function move(
   p: Vec,

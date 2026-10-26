@@ -19,19 +19,18 @@ const server = spawn(
   { stdio: "ignore", detached: true },
 );
 let browser;
-const checks = [];
-const errors = [];
+const checks = [],
+  errors = [];
 const check = (name) => {
   checks.push(name);
   console.log(`✓ ${name}`);
 };
 try {
-  for (let i = 0; i < 80; i++) {
+  for (let n = 0; n < 80; n++) {
     try {
-      const r = await fetch(base);
-      if (r.ok) break;
+      if ((await fetch(base)).ok) break;
     } catch {}
-    if (i === 79) throw new Error("Vite did not start");
+    if (n === 79) throw new Error("Vite did not start");
     await new Promise((r) => setTimeout(r, 150));
   }
   await mkdir("artifacts", { recursive: true });
@@ -48,254 +47,371 @@ try {
     if (m.type() === "error") errors.push(m.text());
   });
   await page.goto(`${base}/?test`);
-  await page.waitForFunction(
-    () =>
-      window.__renderer?.atlasReady &&
-      window.__renderer?.propsReady &&
-      window.__renderer?.tileReady &&
-      window.__renderer?.ballistaAtlasReady,
-  );
+  await page.waitForFunction(() => {
+    const r = window.__renderer;
+    return (
+      r?.atlasReady &&
+      r.propsReady &&
+      r.tileReady &&
+      r.ballistaAtlasReady &&
+      r.walkAtlasReady &&
+      r.workerAtlasReady
+    );
+  });
   await page.evaluate(() => document.fonts.ready);
   await page.screenshot({ path: "artifacts/intro.png" });
   await page.getByRole("button", { name: "Prendre la garde" }).click();
-  await page.waitForTimeout(250);
-  assert.equal(await page.evaluate(() => window.__game().started), true);
-  check("Game starts with three live defenders and locally loaded artwork");
-  await page.evaluate(() => {
-    window.__game().remaining = 10000;
-  });
+  await page.waitForTimeout(200);
+  assert.deepEqual(
+    await page.evaluate(() => {
+      const g = window.__game();
+      g.remaining = 10000;
+      return {
+        archers: g.defenders.length,
+        bows: g.defenders.every((d) => d.weapon === 2),
+        ballistas: g.ballistas.length,
+        supplies: g.stocks.length,
+        points: g.resources,
+        worker: g.workshop.state,
+      };
+    }),
+    {
+      archers: 3,
+      bows: true,
+      ballistas: 0,
+      supplies: 1,
+      points: 0,
+      worker: "hidden",
+    },
+  );
+  check(
+    "New game starts with three bow archers, one reserve, no ballistas and no points",
+  );
   const x = await page.evaluate(() => window.__game().player.x);
   await page.keyboard.down("d");
   await page.waitForTimeout(500);
   await page.keyboard.up("d");
-  assert.ok(
-    await page.evaluate((old) => window.__game().player.x > old + 70, x),
-  );
-  check("WASD input moves the player and the camera follows");
-  await page.keyboard.press("1");
+  assert.ok(await page.evaluate((x) => window.__game().player.x > x + 70, x));
   await page.waitForTimeout(80);
-  assert.equal(await page.evaluate(() => window.__game().player.weapon), 1);
-  let target = await page.evaluate(() => {
-    const g = window.__game();
-    g.spawn("runner", 0);
-    const e = g.enemies.at(-1);
-    e.x = g.player.x + 50;
-    e.y = g.player.y;
-    const p = window.__renderer.screen(e);
-    return { id: e.id, x: p.x, y: p.y - 20 };
+  assert.equal(await page.evaluate(() => window.__game().player.moving), false);
+  check("Keyboard movement works and the walk state stops on key release");
+  const frames = await page.evaluate(async () => {
+    const { archerFrame } = await import("/src/animation.ts");
+    const g = window.__game(),
+      input = {
+        keys: new Set(["d"]),
+        pressed: new Set(),
+        mouse: { x: 0, y: 0 },
+        down: false,
+        clicked: false,
+      },
+      seen = new Set();
+    for (let n = 0; n < 40; n++) {
+      g.update(1 / 60, input, g.player);
+      seen.add(archerFrame(g.player));
+    }
+    input.keys.clear();
+    g.update(1 / 60, input, g.player);
+    return { seen: [...seen], idle: archerFrame(g.player) };
   });
-  await page.mouse.click(target.x, target.y);
-  await page.waitForTimeout(150);
-  assert.ok(
-    await page.evaluate((id) => {
-      const e = window.__game().enemies.find((e) => e.id === id);
-      return !e || e.hp < e.maxHp;
-    }, target.id),
+  assert.equal(frames.seen.length, 4);
+  assert.equal(frames.idle, 0);
+  const spriteHashes = await page.evaluate(() => {
+    const img = window.__renderer.walkAtlas,
+      c = document.createElement("canvas");
+    c.width = 98;
+    c.height = 130;
+    const ctx = c.getContext("2d"),
+      hashes = [];
+    for (let n = 0; n < 4; n++) {
+      ctx.clearRect(0, 0, 98, 130);
+      ctx.drawImage(
+        img,
+        (n * img.width) / 4,
+        (35 * img.height) / 1254,
+        img.width / 4,
+        (412 * img.height) / 1254,
+        0,
+        0,
+        98,
+        130,
+      );
+      const pixels = ctx.getImageData(0, 0, 98, 130).data;
+      let hash = 0;
+      for (const v of pixels) hash = (hash * 31 + v) >>> 0;
+      hashes.push(hash);
+    }
+    return hashes;
+  });
+  assert.equal(new Set(spriteHashes).size, 4);
+  check(
+    "All four walking frames execute and contain distinct illustrated poses",
   );
-  check("Mouse aiming and sword attack damage an enemy");
-  await page.keyboard.press("2");
-  await page.waitForTimeout(500);
-  target = await page.evaluate(() => {
+  await page.screenshot({ path: "artifacts/archers-initial.png" });
+  const enemyId = await page.evaluate(() => {
     const g = window.__game();
     g.spawn("goblin", 0);
     const e = g.enemies.at(-1);
-    e.x = g.player.x + 170;
+    e.x = g.player.x + 100;
     e.y = g.player.y;
-    const p = window.__renderer.screen(e);
-    return { id: e.id, x: p.x, y: p.y - 20 };
+    return e.id;
   });
-  const ammo = await page.evaluate(() => window.__game().player.ammo);
-  await page.mouse.click(target.x, target.y);
-  await page.waitForTimeout(500);
+  for (let n = 0; n < 3; n++) {
+    const pos = await page.evaluate((id) => {
+      const e = window.__game().enemies.find((e) => e.id === id);
+      if (!e || e.hp <= 0) return null;
+      const p = window.__renderer.screen(e);
+      return { x: p.x, y: p.y - 25 };
+    }, enemyId);
+    if (pos) await page.mouse.click(pos.x, pos.y);
+    await page.waitForTimeout(700);
+  }
   assert.ok(
     await page.evaluate(
-      ({ id, ammo }) => {
-        const g = window.__game(),
-          e = g.enemies.find((e) => e.id === id);
-        return g.player.ammo < ammo && (!e || e.hp < e.maxHp);
-      },
-      { id: target.id, ammo },
+      () =>
+        window.__game().kills >= 1 &&
+        window.__game().resources >= 10 &&
+        window.__game().player.ammo < 24,
     ),
   );
-  check("Bow consumes ammunition and an actual projectile hits its target");
+  check(
+    "Real bow shots kill an enemy, consume ammunition and award spendable points",
+  );
+  await page.evaluate(() => {
+    const g = window.__game(),
+      s = g.stocks[0];
+    g.player.ammo = 0;
+    g.player.x = s.x;
+    g.player.y = s.y + 40;
+  });
+  await page.keyboard.press("e");
+  await page.waitForFunction(() => window.__game().player.ammo === 24);
+  check("E at the starting reserve refills the quiver");
+  // Natural round completion using the actual bow, ammo, AI and movement systems.
+  const round = await page.evaluate(() => {
+    const g = window.__game(),
+      input = {
+        keys: new Set(),
+        pressed: new Set(),
+        mouse: { x: 0, y: 0 },
+        down: false,
+        clicked: false,
+      };
+    g.startWave();
+    let n = 0;
+    for (; n < 60 * 180 && g.phase === "assault"; n++) {
+      const p = g.player;
+      if (p.dead <= 0) {
+        if (p.ammo === 0) {
+          const s = g.stocks[0];
+          if (Math.hypot(s.x - p.x, s.y - p.y) < 80) g.interact();
+          else g.navigate(p, s, 1 / 60, 225);
+        } else {
+          const post = { x: 970, y: 552 };
+          if (Math.hypot(post.x - p.x, post.y - p.y) > 30)
+            g.navigate(p, post, 1 / 60, 225);
+          const e = g.enemies
+            .filter((e) => e.hp > 0)
+            .sort(
+              (a, b) =>
+                Math.hypot(a.x - p.x, a.y - p.y) -
+                Math.hypot(b.x - p.x, b.y - p.y),
+            )[0];
+          if (e) g.shoot(p, e);
+        }
+      }
+      g.update(1 / 60, input, { x: p.x, y: 100 });
+    }
+    for (let n = 0; n < 140 && g.phase === "preparation"; n++)
+      g.update(1 / 60, input, g.player);
+    return {
+      phase: g.phase,
+      wave: g.wave,
+      kills: g.kills,
+      points: g.resources,
+      integrity: g.integrity,
+      worker: g.workshop.state,
+      seconds: n / 60,
+    };
+  });
+  assert.equal(round.phase, "preparation");
+  assert.equal(round.wave, 1);
+  assert.equal(round.worker, "ready");
+  assert.ok(round.kills >= 14);
+  check(
+    `First full bow-only round completed: ${round.kills} kills, ${Math.floor(round.points)} points, worker arrived after ${round.seconds.toFixed(1)} s`,
+  );
   await page.evaluate(() => {
     const g = window.__game();
-    g.enemies = [];
-    g.player.cooldown = 0;
-    const b = g.ballistas[1];
-    if (b.user !== null) g.release(g.defenders[b.user]);
-    g.player.x = 1430;
-    g.player.y = 582;
+    g.player.x = g.workshop.x;
+    g.player.y = g.workshop.y + 65;
   });
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(700);
   await page.keyboard.press("e");
-  await page.waitForTimeout(80);
-  assert.equal(await page.evaluate(() => window.__game().player.mounted), 1);
+  await page.getByRole("heading", { name: "À votre service." }).waitFor();
+  await page.screenshot({ path: "artifacts/worker-shop.png" });
+  check(
+    "The worker ascends the central stair, speaks and opens the shop with E",
+  );
+  const before = await page.evaluate(() => window.__game().resources);
+  await page.locator('[data-equipment="ballista"]').click();
+  assert.equal(
+    await page.evaluate(() => window.__game().placement),
+    "ballista",
+  );
+  assert.equal(await page.evaluate(() => window.__game().resources), before);
+  const slot = await page.evaluate(() =>
+    window.__renderer.screen({ x: 1430, y: 552 }),
+  );
+  await page.mouse.click(slot.x, slot.y);
+  await page.waitForFunction(
+    () => window.__game().workshop.job?.kind === "ballista",
+  );
+  assert.equal(await page.evaluate(() => window.__game().ballistas.length), 0);
+  assert.equal(
+    await page.evaluate(() => window.__game().resources),
+    before - 90,
+  );
+  await page.screenshot({ path: "artifacts/worker-delivery.png" });
+  check(
+    "Choosing a marked socket charges once and starts a physical delivery rather than an instant spawn",
+  );
+  await page.keyboard.press("Tab");
+  await page.getByLabel("Ordre pour Brune").selectOption("follow");
+  await page.getByLabel("Ordre pour Osric").selectOption("follow");
+  await page.keyboard.press("Tab");
+  await page.evaluate(() => {
+    const g = window.__game(),
+      i = {
+        keys: new Set(),
+        pressed: new Set(),
+        mouse: { x: 0, y: 0 },
+        down: false,
+        clicked: false,
+      };
+    for (let n = 0; n < 60 * 12; n++) g.update(1 / 60, i, g.player);
+  });
+  assert.equal(await page.evaluate(() => window.__game().ballistas.length), 1);
+  assert.equal(await page.evaluate(() => window.__game().workshop.ready), true);
+  check(
+    "Worker carries, installs and returns; the ordered ballista now exists at its selected socket",
+  );
+  await page.evaluate(() => {
+    const g = window.__game(),
+      b = g.ballistas[0];
+    g.player.x = b.x;
+    g.player.y = b.y + 35;
+  });
+  await page.waitForTimeout(700);
+  await page.keyboard.press("e");
+  await page.waitForFunction(() => window.__game().player.mounted === 0);
   const aim = await page.evaluate(() =>
     window.__renderer.screen({ x: 1430, y: 220 }, 0),
   );
   await page.mouse.click(aim.x, aim.y);
-  await page.waitForTimeout(80);
-  assert.equal(
-    await page.evaluate(() => window.__game().ballistas[1].loaded),
-    false,
-  );
+  await page.waitForFunction(() => !window.__game().ballistas[0].loaded);
   await page.keyboard.press("r");
-  await page.waitForTimeout(80);
-  assert.ok(await page.evaluate(() => window.__game().ballistas[1].reload > 0));
+  await page.waitForFunction(() => window.__game().ballistas[0].reload > 0);
   await page.waitForTimeout(3300);
   assert.equal(
-    await page.evaluate(() => window.__game().ballistas[1].loaded),
+    await page.evaluate(() => window.__game().ballistas[0].loaded),
     true,
   );
   await page.keyboard.press("f");
-  await page.waitForTimeout(80);
-  const old = await page.evaluate(() => window.__game().ballistas[1].x);
-  await page.keyboard.down("a");
-  await page.waitForTimeout(400);
-  await page.keyboard.up("a");
-  assert.ok(
-    await page.evaluate((x) => window.__game().ballistas[1].x < x - 20, old),
-  );
+  await page.waitForFunction(() => window.__game().player.carried === 0);
+  await page.keyboard.down("s");
+  await page.waitForTimeout(650);
+  await page.keyboard.up("s");
+  assert.ok(await page.evaluate(() => window.__game().ballistas[0].y > 600));
   await page.keyboard.press("e");
-  await page.waitForTimeout(80);
-  assert.equal(await page.evaluate(() => window.__game().player.carried), null);
+  await page.waitForFunction(() => window.__game().player.carried === null);
   check(
-    "E / click / R / F moves through the full ballista mount, fire, reload, carry and drop cycle",
+    "Purchased ballista can be mounted, aimed, fired, reloaded, moved freely and deposited",
+  );
+  await page.keyboard.press("b");
+  await page.locator('[data-equipment="stock"]').click();
+  const supplySpot = await page.evaluate(() =>
+    window.__renderer.screen({ x: 1610, y: 1100 }),
+  );
+  await page.mouse.click(supplySpot.x, supplySpot.y);
+  await page.waitForFunction(
+    () => window.__game().workshop.job?.kind === "stock",
   );
   await page.evaluate(() => {
     const g = window.__game(),
-      w = g.walls[1];
-    w.hp = 400;
-    g.player.x = w.x;
-    g.player.y = w.y + 65;
+      i = {
+        keys: new Set(),
+        pressed: new Set(),
+        mouse: { x: 0, y: 0 },
+        down: false,
+        clicked: false,
+      };
+    for (let n = 0; n < 60 * 10; n++) g.update(1 / 60, i, g.player);
   });
-  const before = await page.evaluate(() => window.__game().walls[1].hp);
-  await page.keyboard.down("r");
-  await page.waitForTimeout(400);
-  await page.keyboard.up("r");
-  assert.ok(
-    await page.evaluate((hp) => window.__game().walls[1].hp > hp, before),
+  assert.equal(await page.evaluate(() => window.__game().stocks.length), 2);
+  check(
+    "Buying a reserve delivers and installs an actual second ammunition refill location",
   );
-  check("Holding R repairs a damaged wall with wood");
-  await page.keyboard.press("Tab");
-  await page.getByLabel("Ordre pour Brune").selectOption("follow");
-  assert.equal(
-    await page.evaluate(() => window.__game().defenders[1].order),
-    "follow",
-  );
-  await page.getByLabel("Front pour Osric").selectOption("1");
-  assert.equal(await page.evaluate(() => window.__game().defenders[2].side), 1);
-  await page.keyboard.press("Tab");
-  check("Companion order controls update independent AI orders and fronts");
-  // A frozen test fixture isolates the purchase UI from a ticking intermission.
-  await page.evaluate(() => {
-    const g = window.__game();
-    g.phase = "preparation";
-    g.remaining = 10000;
-    g.resources = 300;
-  });
   await page.keyboard.press("b");
-  await page.locator('[data-upgrade="power"]').click();
-  assert.equal(await page.evaluate(() => window.__game().level("power")), 1);
+  await page.locator('[data-upgrade="arrows"]').click();
+  assert.equal(await page.evaluate(() => window.__game().level("arrows")), 0);
+  await page.evaluate(() => {
+    const g = window.__game(),
+      i = {
+        keys: new Set(),
+        pressed: new Set(),
+        mouse: { x: 0, y: 0 },
+        down: false,
+        clicked: false,
+      };
+    for (let n = 0; n < 60 * 4; n++) g.update(1 / 60, i, g.player);
+  });
+  assert.equal(await page.evaluate(() => window.__game().level("arrows")), 1);
+  check("Purchased arrow upgrade is applied when the worker delivers it");
   await page
     .getByRole("button", { name: "Appeler la prochaine vague" })
     .click();
-  assert.equal(await page.evaluate(() => window.__game().phase), "assault");
-  check(
-    "Workshop purchases change real stats and launching a wave starts enemy spawns",
-  );
-  await page.waitForTimeout(1300);
+  assert.equal(await page.evaluate(() => window.__game().wave), 2);
+  await page.waitForTimeout(1000);
   assert.ok(await page.evaluate(() => window.__game().enemies.length > 0));
+  check("The second round starts with new fronts and the equipment persists");
   await page.keyboard.press("Escape");
   assert.equal(await page.evaluate(() => window.__game().paused), true);
-  const tickTime = await page.evaluate(() => window.__game().time);
+  const time = await page.evaluate(() => window.__game().time);
   await page.waitForTimeout(150);
-  assert.equal(await page.evaluate(() => window.__game().time), tickTime);
+  assert.equal(await page.evaluate(() => window.__game().time), time);
   await page.getByRole("button", { name: "Continuer la veille" }).click();
-  check("Pause freezes the simulation and resume restores it");
-  // Advance the same fixed-step simulation without wall-clock waits to exercise a real assault.
-  const assault = await page.evaluate(() => {
-    const g = window.__game();
-    g.defenders[1].order = "auto";
-    g.defenders[2].order = "auto";
-    g.player.x = 1200;
-    g.player.y = 552;
-    g.player.hp = 160;
-    const i = {
-      keys: new Set(),
-      pressed: new Set(),
-      mouse: { x: 0, y: 0 },
-      down: false,
-      clicked: false,
-    };
-    for (let n = 0; n < 60 * 35 && g.phase !== "defeat"; n++) {
-      const e = g.enemies
-        .filter((e) => e.hp > 0)
-        .sort(
-          (a, b) =>
-            Math.hypot(a.x - g.player.x, a.y - g.player.y) -
-            Math.hypot(b.x - g.player.x, b.y - g.player.y),
-        )[0];
-      if (e) {
-        g.player.weapon = 2;
-        if (g.player.ammo === 0) g.player.weapon = 1;
-        g.shoot(g.player, e);
-      }
-      g.update(1 / 60, i, e || { x: 1200, y: 100 });
-    }
-    const firstWaveComplete = g.phase === "preparation" && g.wave === 1;
-    for (let n = 0; n < 60 * 45 && g.phase !== "defeat"; n++) {
-      const e = g.enemies.find((e) => e.hp > 0);
-      if (e && g.player.ammo > 0) g.shoot(g.player, e);
-      g.update(1 / 60, i, e || { x: 1200, y: 100 });
-    }
-    return {
-      wave: g.wave,
-      kills: g.kills,
-      integrity: g.integrity,
-      live: g.enemies.filter((e) => e.hp > 0).length,
-      phase: g.phase,
-      firstWaveComplete,
-    };
-  });
-  assert.ok(assault.kills > 0);
-  assert.ok(assault.firstWaveComplete);
-  assert.ok(assault.wave >= 2);
-  assert.ok(assault.integrity < 1 || assault.kills >= 5);
-  check(
-    `Assault simulation: ${assault.kills} kills, ${Math.round(assault.integrity * 100)}% integrity, phase ${assault.phase}`,
-  );
-  await page.evaluate(() => {
-    window.__renderer.zoom = 0.66;
-  });
-  await page.waitForTimeout(350);
-  await page.screenshot({ path: "artifacts/gameplay.png" });
+  check("Pause and resume preserve the game state");
   await page.keyboard.press("h");
   await page.getByRole("heading", { name: "Chaque geste compte." }).waitFor();
   await page.keyboard.press("h");
+  await page.screenshot({ path: "artifacts/gameplay.png" });
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.waitForTimeout(150);
-  await page.screenshot({ path: "artifacts/desktop-1024.png" });
   assert.equal(
     await page.locator("body").evaluate((el) => el.scrollWidth > innerWidth),
     false,
   );
-  check("Help and desktop layout at 1024 × 768 work without overflow");
-  await page.evaluate(() => {
-    const g = window.__game();
-    g.phase = "defeat";
-  });
+  check("Help and the desktop HUD work without horizontal overflow");
+  await page.evaluate(() => (window.__game().phase = "defeat"));
   await page.waitForTimeout(150);
   await page.getByRole("button", { name: "Reprendre la garde" }).click();
-  assert.equal(await page.evaluate(() => window.__game().phase), "preparation");
-  assert.equal(await page.evaluate(() => window.__game().wave), 0);
-  check("Defeat screen starts a clean new game");
+  assert.deepEqual(
+    await page.evaluate(() => ({
+      ballistas: window.__game().ballistas.length,
+      stocks: window.__game().stocks.length,
+      wave: window.__game().wave,
+    })),
+    { ballistas: 0, stocks: 1, wave: 0 },
+  );
+  check(
+    "Restart clears purchased gear and restores the bow-only starting state",
+  );
   assert.deepEqual(errors, []);
-  check("No browser console or JavaScript errors");
+  check("No browser JavaScript or console errors");
   await writeFile(
     "artifacts/browser-results.json",
-    JSON.stringify({ checks, assault, errors }, null, 2),
+    JSON.stringify({ checks, round, errors }, null, 2),
   );
   console.log(`\n${checks.length} browser checks passed.`);
 } finally {

@@ -1,6 +1,6 @@
 import type { Simulation } from "./simulation";
 import { type Vec, type Side, distance, toward } from "./types";
-import { POSTS, STOCKS, move } from "./map";
+import { POSTS, sideOf, move } from "./map";
 export function updateAllies(g: Simulation, dt: number) {
   const alive = g.enemies.filter((e) => e.hp > 0);
   for (const d of g.defenders.slice(1)) {
@@ -24,6 +24,14 @@ export function updateAllies(g: Simulation, dt: number) {
         d.side = desired;
       }
     }
+    if (d.ammo === 0 && d.mounted === null) {
+      const s = [...g.stocks].sort(
+        (a, b) => distance(a, d) - distance(b, d),
+      )[0];
+      if (distance(s, d) < 70) d.ammo = 24;
+      else g.navigate(d, s, dt, 210);
+      continue;
+    }
     if (d.order === "follow") {
       g.release(d);
       const target = {
@@ -35,7 +43,7 @@ export function updateAllies(g: Simulation, dt: number) {
         .filter((e) => distance(e, d) < 400)
         .sort((a, b) => distance(a, d) - distance(b, d))[0];
       if (near) {
-        d.weapon = distance(d, near) < 90 ? 1 : 2;
+        d.weapon = 2;
         g.shoot(d, near);
       }
       continue;
@@ -45,7 +53,11 @@ export function updateAllies(g: Simulation, dt: number) {
       .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
     if (
       (d.order === "repair" ||
-        (d.order === "auto" && alive.length < 3 && d.id === 1)) &&
+        (d.order === "auto" &&
+          alive.length < 3 &&
+          d.id === 1 &&
+          g.phase === "assault" &&
+          g.integrity < 0.4)) &&
       damaged.length &&
       g.resources > 3
     ) {
@@ -78,13 +90,13 @@ export function updateAllies(g: Simulation, dt: number) {
       .filter((e) => distance(e, d) < 95)
       .sort((a, b) => distance(a, d) - distance(b, d))[0];
     if (near) {
-      d.weapon = 1;
+      d.weapon = 2;
       g.shoot(d, near);
       continue;
     }
     const available = g.ballistas.filter(
       (b) =>
-        Math.floor(b.id / 2) === d.side &&
+        sideOf(b) === d.side &&
         b.hp > 0 &&
         b.user === null &&
         b.carrier === null,
@@ -101,12 +113,6 @@ export function updateAllies(g: Simulation, dt: number) {
       }
       continue;
     }
-    if (d.ammo === 0) {
-      const s = [...STOCKS].sort((a, b) => distance(a, d) - distance(b, d))[0];
-      if (distance(s, d) < 70) d.ammo = 24;
-      else g.navigate(d, s, dt, 210);
-      continue;
-    }
     const post = POSTS[d.side * 2 + ((d.id - 1) % 2)];
     if (distance(d, post) > 65) g.navigate(d, post, dt, 210);
     const enemy = alive
@@ -120,6 +126,7 @@ export function updateAllies(g: Simulation, dt: number) {
 }
 export function updateEnemies(g: Simulation, dt: number) {
   for (const e of g.enemies) {
+    e.moving = false;
     if (e.hp <= 0) continue;
     const walls = g.walls.filter((w) => w.side === e.side);
     const gate = walls.find((w) => w.gate)!;
@@ -154,6 +161,8 @@ export function updateEnemies(g: Simulation, dt: number) {
       const speed = melee ? (e.kind === "runner" ? 145 : 62) : 70;
       move(e, dir.x * speed * dt, dir.y * speed * dt, e.radius, g.walls);
       e.walk += (dt * speed) / 25;
+      e.moving = true;
+      e.moveFacing = Math.atan2(dir.y, dir.x);
     } else if (e.cooldown <= 0) {
       if (melee) {
         g.damageWall(w.id, e.kind === "brute" ? 38 : 13);
