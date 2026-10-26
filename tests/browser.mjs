@@ -59,6 +59,47 @@ try {
     );
   });
   await page.evaluate(() => document.fonts.ready);
+  assert.equal(await page.locator("[data-hero]").count(), 8);
+  for (let id = 0; id < 8; id++) {
+    await page.locator(`[data-hero="${id}"]`).click();
+    assert.equal(await page.evaluate(() => window.__game().player.hero), id);
+  }
+  await page
+    .getByRole("button", { name: "Personnage IA1", exact: true })
+    .click();
+  await page.locator('[data-hero="3"]').click();
+  await page
+    .getByRole("button", { name: "Personnage IA2", exact: true })
+    .click();
+  await page.locator('[data-hero="2"]').click();
+  assert.deepEqual(
+    await page.evaluate(() => window.__game().defenders.map((d) => d.hero)),
+    [7, 3, 2],
+  );
+  for (const [slot, id] of [
+    [0, 0],
+    [1, 1],
+    [2, 4],
+  ]) {
+    await page
+      .getByRole("button", {
+        name: slot === 0 ? "Personnage J1" : `Personnage IA${slot}`,
+        exact: true,
+      })
+      .click();
+    await page.locator(`[data-hero="${id}"]`).click();
+  }
+  await page
+    .getByRole("button", { name: "Personnage J1", exact: true })
+    .click();
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll(".hero-art img")].every(
+      (i) => i.complete && i.naturalWidth > 0,
+    ),
+  );
+  check(
+    "All eight hooded heroes and both companion slots can be chosen before the game",
+  );
   await page.screenshot({ path: "artifacts/intro.png" });
   await page.getByRole("button", { name: "Prendre la garde" }).click();
   await page.waitForTimeout(200);
@@ -71,7 +112,7 @@ try {
         bows: g.defenders.every((d) => d.weapon === 2),
         ballistas: g.ballistas.length,
         supplies: g.stocks.length,
-        points: g.resources,
+        gold: g.coins,
         worker: g.workshop.state,
       };
     }),
@@ -80,12 +121,12 @@ try {
       bows: true,
       ballistas: 0,
       supplies: 1,
-      points: 0,
+      gold: 0,
       worker: "hidden",
     },
   );
   check(
-    "New game starts with three bow archers, one reserve, no ballistas and no points",
+    "New game starts with three bow archers, one reserve, no ballistas and no gold",
   );
   const x = await page.evaluate(() => window.__game().player.x);
   await page.keyboard.down("d");
@@ -117,7 +158,7 @@ try {
   assert.equal(frames.seen.length, 4);
   assert.equal(frames.idle, 0);
   const spriteHashes = await page.evaluate(() => {
-    const img = window.__renderer.walkAtlas,
+    const img = window.__renderer.heroWalk[0],
       c = document.createElement("canvas");
     c.width = 98;
     c.height = 130;
@@ -128,9 +169,9 @@ try {
       ctx.drawImage(
         img,
         (n * img.width) / 4,
-        (35 * img.height) / 1254,
+        (22 * img.height) / 1254,
         img.width / 4,
-        (412 * img.height) / 1254,
+        (318 * img.height) / 1254,
         0,
         0,
         98,
@@ -170,13 +211,66 @@ try {
     await page.evaluate(
       () =>
         window.__game().kills >= 1 &&
-        window.__game().resources >= 10 &&
+        window.__game().coins >= 10 &&
         window.__game().player.ammo < 24,
     ),
   );
   check(
-    "Real bow shots kill an enemy, consume ammunition and award spendable points",
+    "Real bow shots kill an enemy, consume ammunition and award spendable gold",
   );
+  const special = await page.evaluate(() => {
+    const g = window.__game();
+    g.defenders.slice(1).forEach((d) => (d.dead = 1000));
+    const ids = [];
+    for (const dy of [-25, 25]) {
+      g.spawn("goblin", 0);
+      const e = g.enemies.at(-1);
+      e.x = g.player.x + 185;
+      e.y = g.player.y + dy;
+      e.hp = e.maxHp = 50;
+      e.stun = 100;
+      ids.push(e.id);
+    }
+    const p = window.__renderer.screen(g.enemies.find((e) => e.id === ids[0]));
+    return { ids, x: p.x, y: p.y - 25, gold: g.coins, ammo: g.player.ammo };
+  });
+  await page.mouse.click(special.x, special.y, { button: "right" });
+  await page.waitForFunction(
+    () => window.__game().player.shot?.power === "explosive",
+  );
+  assert.equal(
+    await page.evaluate(() =>
+      window.__game().projectiles.some((q) => q.power === "explosive"),
+    ),
+    false,
+  );
+  await page.waitForFunction(() =>
+    window.__game().effects.some((e) => e.kind === "explosion"),
+  );
+  assert.equal(
+    await page.evaluate(() => window.__game().coins),
+    special.gold + 20,
+  );
+  assert.equal(
+    await page.evaluate(() => window.__game().player.ammo),
+    special.ammo - 1,
+  );
+  assert.ok(
+    await page.evaluate(() => window.__game().player.abilityCooldown > 8),
+  );
+  await page.screenshot({ path: "artifacts/power-explosion.png" });
+  check(
+    "Right-click winds up an explosive arrow, damages two enemies, awards gold and starts its cooldown",
+  );
+  await page.evaluate(() => {
+    window
+      .__game()
+      .defenders.slice(1)
+      .forEach((d) => {
+        d.dead = 0;
+        d.hp = d.maxHp;
+      });
+  });
   await page.evaluate(() => {
     const g = window.__game(),
       s = g.stocks[0];
@@ -187,6 +281,20 @@ try {
   await page.keyboard.press("e");
   await page.waitForFunction(() => window.__game().player.ammo === 24);
   check("E at the starting reserve refills the quiver");
+  await page.evaluate(() => window.__game().startWave());
+  await page
+    .getByText("Des monstres arrivent du nord !", { exact: true })
+    .waitFor();
+  await page
+    .locator("#assault-alert")
+    .evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+  const alertBox = await page.locator("#assault-alert").boundingBox();
+  assert.ok(Math.abs(alertBox.x + alertBox.width / 2 - 720) < 3);
+  assert.ok(Math.abs(alertBox.y + alertBox.height / 2 - 500) < 3);
+  await page.screenshot({ path: "artifacts/wave-warning.png" });
+  check(
+    "The first assault announces monsters arriving from the north in a centered alert",
+  );
   // Natural round completion using the actual bow, ammo, AI and movement systems.
   const round = await page.evaluate(() => {
     const g = window.__game(),
@@ -228,7 +336,7 @@ try {
       phase: g.phase,
       wave: g.wave,
       kills: g.kills,
-      points: g.resources,
+      gold: g.coins,
       integrity: g.integrity,
       worker: g.workshop.state,
       seconds: n / 60,
@@ -239,7 +347,7 @@ try {
   assert.equal(round.worker, "ready");
   assert.ok(round.kills >= 14);
   check(
-    `First full bow-only round completed: ${round.kills} kills, ${Math.floor(round.points)} points, worker arrived after ${round.seconds.toFixed(1)} s`,
+    `First full bow-only round completed: ${round.kills} kills, ${Math.floor(round.gold)} gold, worker arrived after ${round.seconds.toFixed(1)} s`,
   );
   await page.evaluate(() => {
     const g = window.__game();
@@ -253,13 +361,13 @@ try {
   check(
     "The worker ascends the central stair, speaks and opens the shop with E",
   );
-  const before = await page.evaluate(() => window.__game().resources);
+  const before = await page.evaluate(() => window.__game().coins);
   await page.locator('[data-equipment="ballista"]').click();
   assert.equal(
     await page.evaluate(() => window.__game().placement),
     "ballista",
   );
-  assert.equal(await page.evaluate(() => window.__game().resources), before);
+  assert.equal(await page.evaluate(() => window.__game().coins), before);
   const slot = await page.evaluate(() =>
     window.__renderer.screen({ x: 1430, y: 552 }),
   );
@@ -268,10 +376,7 @@ try {
     () => window.__game().workshop.job?.kind === "ballista",
   );
   assert.equal(await page.evaluate(() => window.__game().ballistas.length), 0);
-  assert.equal(
-    await page.evaluate(() => window.__game().resources),
-    before - 90,
-  );
+  assert.equal(await page.evaluate(() => window.__game().coins), before - 90);
   await page.screenshot({ path: "artifacts/worker-delivery.png" });
   check(
     "Choosing a marked socket charges once and starts a physical delivery rather than an instant spawn",
@@ -372,6 +477,11 @@ try {
     .getByRole("button", { name: "Appeler la prochaine vague" })
     .click();
   assert.equal(await page.evaluate(() => window.__game().wave), 2);
+  await page
+    .getByText("Des monstres arrivent de l’est et de l’ouest !", {
+      exact: true,
+    })
+    .waitFor();
   await page.waitForTimeout(1000);
   assert.ok(await page.evaluate(() => window.__game().enemies.length > 0));
   check("The second round starts with new fronts and the equipment persists");
@@ -407,6 +517,112 @@ try {
   check(
     "Restart clears purchased gear and restores the bow-only starting state",
   );
+  // Every selectable hero must route a real right-click to its own live power.
+  for (const id of [0, 1, 2, 3, 4, 5, 6, 7]) {
+    await page.locator(`[data-hero="${id}"]`).click();
+    await page.getByRole("button", { name: "Prendre la garde" }).click();
+    const fixture = await page.evaluate(() => {
+      const g = window.__game();
+      g.remaining = 10000;
+      g.player.x = 1100;
+      g.player.y = 1100;
+      g.player.hp = 80;
+      g.defenders.slice(1).forEach((d) => (d.dead = 1000));
+      const ids = [];
+      for (const x of [1300, 1360, 1420]) {
+        g.spawn("goblin", 0);
+        const e = g.enemies.at(-1);
+        e.x = x;
+        e.y = 1100;
+        e.hp = e.maxHp = 1000;
+        e.stun = 100;
+        ids.push(e.id);
+      }
+      return { ids };
+    });
+    await page.waitForTimeout(450);
+    const target = await page.evaluate((enemyId) => {
+      const p = window.__renderer.screen(
+        window.__game().enemies.find((e) => e.id === enemyId),
+      );
+      return { x: p.x, y: p.y - 25 };
+    }, fixture.ids[0]);
+    await page.mouse.click(target.x, target.y, { button: "right" });
+    await page.waitForFunction(() => window.__game().player.shot !== null);
+    const cast = await page.evaluate(() => {
+      const d = window.__game().player;
+      return {
+        hero: d.hero,
+        power: d.shot.power,
+        ammo: d.ammo,
+        cooldown: d.abilityCooldown,
+      };
+    });
+    assert.equal(cast.hero, id);
+    assert.equal(
+      cast.power,
+      [
+        "explosive",
+        "multishot",
+        "frost",
+        "fire",
+        "piercing",
+        "moon",
+        "poison",
+        "lightning",
+      ][id],
+    );
+    assert.equal(cast.ammo, id === 1 ? 21 : 23);
+    assert.ok(cast.cooldown > 0);
+    if (id === 0) {
+      await page.waitForFunction(
+        () => window.__game().player.shot?.remaining < 0.1,
+      );
+      await page.evaluate(() => (window.__game().paused = true));
+      await page.screenshot({ path: "artifacts/bow-full-draw.png" });
+      await page.evaluate(() => (window.__game().paused = false));
+    }
+    await page.waitForFunction(
+      (enemyId) =>
+        window.__game().enemies.find((e) => e.id === enemyId).hp < 1000,
+      fixture.ids[0],
+    );
+    const result = await page.evaluate(() => {
+      const g = window.__game();
+      return {
+        enemies: g.enemies.map((e) => ({
+          hp: e.hp,
+          slow: e.slow,
+          burn: e.burn,
+          poison: e.poison,
+          stun: e.stun,
+        })),
+        playerHp: g.player.hp,
+      };
+    });
+    if (id === 0) assert.ok(result.enemies[1].hp < 1000);
+    if (id === 2) assert.ok(result.enemies[0].slow > 0);
+    if (id === 3) assert.ok(result.enemies[0].burn > 0);
+    if (id === 4) {
+      await page.waitForFunction(() =>
+        window.__game().enemies.every((e) => e.hp <= 905),
+      );
+    }
+    if (id === 5) assert.equal(result.playerHp, 98);
+    if (id === 6) assert.ok(result.enemies[0].poison > 0);
+    if (id === 7)
+      assert.ok(
+        result.enemies.every((e) => e.hp === 955 && e.stun > 0 && e.stun < 1),
+      );
+    if (id === 2) await page.screenshot({ path: "artifacts/power-frost.png" });
+    if (id === 7)
+      await page.screenshot({ path: "artifacts/power-lightning.png" });
+    check(
+      `Chosen hood ${id + 1}/8 triggers ${cast.power} through a real right-click`,
+    );
+    await page.evaluate(() => (window.__game().phase = "defeat"));
+    await page.getByRole("button", { name: "Reprendre la garde" }).click();
+  }
   assert.deepEqual(errors, []);
   check("No browser JavaScript or console errors");
   await writeFile(

@@ -1433,3 +1433,675 @@ kbd {
     display: none;
   }
 }
+/* Eight hooded heroes and their real bow abilities. */
+.resource > span {
+  transform: none;
+  display: flex;
+  align-items: center;
+}
+.resource svg {
+  width: 24px;
+  height: 28px;
+}
+.shop-wallet {
+  font:
+    500 24px "Cinzel",
+    Georgia,
+    serif;
+  color: var(--gold);
+  margin: 17px 0;
+}
+.shop-wallet > span {
+  font:
+    9px "DM Sans",
+    sans-serif;
+  color: #8da79c;
+}
+.hero-portrait {
+  background-size: 245%;
+  background-position: 50% 5%;
+  background-repeat: no-repeat;
+}
+.portrait.hero-portrait img {
+  display: none;
+}
+.power-slot {
+  height: 58px;
+  min-width: 135px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 8px 9px;
+  background: #a0b6b009;
+  border: 1px solid color-mix(in srgb, var(--hero-color) 45%, transparent);
+  border-radius: 5px;
+}
+.power-slot > kbd {
+  position: absolute;
+  left: 7px;
+  top: 3px;
+  font-size: 6px;
+  padding: 0;
+  border: 0;
+  color: #9db6ac;
+}
+.power-slot > span {
+  font-size: 25px;
+  color: var(--hero-color);
+  width: 26px;
+  text-align: center;
+  margin-top: 8px;
+}
+.power-slot b {
+  display: block;
+  font-size: 9px;
+  font-weight: 500;
+  max-width: 87px;
+}
+.power-slot small {
+  display: block;
+  font-size: 7px;
+  color: #95ada3;
+  margin-top: 5px;
+}
+.power-slot > i {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--hero-color);
+  max-width: 100%;
+  transition: width 0.1s;
+}
+.power-slot.cooling > span {
+  opacity: 0.45;
+}
+.loadout .ammo-tip {
+  width: 107px;
+  font-size: 7px;
+}
+.assault-alert {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(620px, 75vw);
+  padding: 24px 30px 21px;
+  text-align: center;
+  background: linear-gradient(
+    90deg,
+    #0d1f2900,
+    #0c1d28ed 13%,
+    #0c1d28ed 87%,
+    #0d1f2900
+  );
+  border-block: 1px solid #c8ac7066;
+  box-shadow: 0 15px 70px #0004;
+  animation: assault-arrives 0.45s ease-out;
+  pointer-events: none;
+}
+.assault-alert .eyebrow {
+  color: #d1b681;
+  font-size: 8px;
+  letter-spacing: 2.5px;
+}
+.assault-alert > strong {
+  font:
+    400 clamp(18px, 2vw, 29px)/1.5 "Cinzel",
+    Georgia,
+    serif;
+  display: block;
+  color: #f4e1b8;
+  margin: 10px 0 0;
+}
+.assault-emblem {
+  display: block;
+  color: #efbb6c;
+  font-size: 26px;
+  margin-bottom: 10px;
+}
+.assault-rule {
+  display: block;
+  width: 55px;
+  height: 1px;
+  background: #caae78;
+  margin: 17px auto 0;
+}
+@keyframes assault-arrives {
+  from {
+    transform: translate(-50%, -45%);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%);
+    opacity: 1;
+  }
+}
+.roster-overlay {
+  display: block;
+  background: linear-gradient(90deg, #071820f2, #0b1e28ed 45%, #0b1d27db);
+  overflow: auto;
+}
+.roster-shell {
+  display: grid;
+  grid-template-columns: minmax(300px, 420px) minmax(0, 690px);
+  gap: 70px;
+  max-width: 1320px;
+  padding: 55px 60px;
+  margin: auto;
+  min-height: 100vh;
+  align-items: center;
+}
+.roster-story .intro-crest {
+  height: 49px;
+  width: 45px;
+  margin: 0 0 22px;
+}
+.roster-story > .eyebrow {
+  font-size: 7px;
+  color: #b7a888;
+  letter-spacing: 1.6px;
+}
+.roster-story h1 {
+  font:
+    400 49px/1.2 "Cinzel",
+    Georgia,
+    serif;
+  letter-spacing: -1px;
+  margin: 19px 0 16px;
+}
+.roster-story h1 > span {
+  color: var(--gold);
+}
+.roster-story > p {
+  color: #9db0a5;
+  font-size: 11px;
+  line-height: 1.9;
+  margin: 0 0 17px;
+}
+.chosen-profile {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: 133px;
+  margin: 12px 0 12px;
+}
+.chosen-portrait {
+  height: 140px;
+  width: 124px;
+  flex-shrink: 0;
+  position: relative;
+  background: radial-gradient(
+    ellipse at 50% 80%,
+    color-mix(in srgb, var(--hero-color) 18%, transparent),
+    transparent 64%
+  );
+}
+.chosen-portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.chosen-profile small {
+  font-size: 7px;
+  letter-spacing: 1.5px;
+  color: #a6b8aa;
+}
+.chosen-profile h2 {
+  font:
+    400 27px "Cinzel",
+    Georgia,
+    serif;
+  margin: 8px 0;
+  color: #e6dbbf;
+}
+.chosen-profile p {
+  font-size: 9px;
+  color: #9aafa2;
+  line-height: 1.6;
+  margin: 0;
+}
+.chosen-power {
+  display: flex;
+  gap: 13px;
+  border-left: 2px solid var(--hero-color);
+  background: #a1b3aa07;
+  padding: 13px 13px 13px 11px;
+  margin-bottom: 23px;
+}
+.chosen-power > span {
+  color: var(--hero-color);
+  font-size: 27px;
+  padding-top: 2px;
+}
+.chosen-power strong {
+  font:
+    500 12px "Cinzel",
+    Georgia,
+    serif;
+  color: #e4d8ba;
+}
+.chosen-power p {
+  color: #9aada4;
+  font-size: 10px;
+  line-height: 1.6;
+  margin: 6px 0;
+}
+.chosen-power small {
+  font-size: 7px;
+  color: #c4b48e;
+  line-height: 1.6;
+}
+.roster-story .primary {
+  min-width: 255px;
+  width: 100%;
+}
+.roster-story .intro-details {
+  font-size: 8px;
+  gap: 9px;
+  justify-content: center;
+  margin-top: 15px;
+}
+.roster-controls {
+  font-size: 7px;
+  color: #6d918c;
+  display: block;
+  text-align: center;
+  margin-top: 17px;
+}
+.gallery-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.gallery-heading .eyebrow {
+  font-size: 8px;
+  color: #b3c5ba;
+}
+.gallery-heading > span {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: #7d9f92;
+}
+.roster-slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-bottom: 18px;
+}
+.roster-slots > button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  background: #19323977;
+  border: 1px solid #9cafa52b;
+  border-radius: 6px;
+  padding: 10px 9px;
+  text-align: left;
+  transition: border-color 0.2s;
+}
+.roster-slots > button[aria-pressed="true"] {
+  border-color: var(--hero-color);
+  background: #aeb5a30c;
+}
+.slot-portrait {
+  height: 37px;
+  width: 37px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background-color: #243e44;
+  background-size: 245%;
+  background-position: 50% 5%;
+  border: 1px solid color-mix(in srgb, var(--hero-color) 55%, transparent);
+}
+.roster-slots small {
+  font-size: 6px;
+  letter-spacing: 0.8px;
+  color: #86a399;
+  display: block;
+  white-space: nowrap;
+}
+.roster-slots strong {
+  display: block;
+  font:
+    500 11px "Cinzel",
+    Georgia,
+    serif;
+  margin-top: 5px;
+}
+.roster-slots i {
+  margin-left: auto;
+  color: var(--hero-color);
+  font-style: normal;
+  font-size: 11px;
+}
+.roster-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 11px;
+}
+.hero-card {
+  position: relative;
+  min-width: 0;
+  border: 1px solid #94a89d29;
+  border-radius: 6px;
+  background: linear-gradient(#122b34bd, #0d202ccf);
+  text-align: center;
+  padding: 9px 5px 12px;
+  transition:
+    border-color 0.2s,
+    background 0.2s,
+    transform 0.2s;
+  overflow: hidden;
+}
+.hero-card:hover {
+  border-color: var(--hero-color);
+  background: #203b4180;
+  transform: translateY(-2px);
+}
+.hero-card[aria-pressed="true"] {
+  border-color: var(--hero-color);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--hero-color) 20%, transparent),
+    inset 0 0 32px color-mix(in srgb, var(--hero-color) 9%, transparent);
+}
+.hero-art {
+  height: 145px;
+  background: radial-gradient(
+    ellipse at 50% 75%,
+    color-mix(in srgb, var(--hero-color) 10%, transparent),
+    transparent 65%
+  );
+  margin-top: 6px;
+}
+.hero-art img {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+}
+.hero-card > strong {
+  font:
+    500 12px "Cinzel",
+    Georgia,
+    serif;
+  display: block;
+  margin-top: 5px;
+  color: #e7e4d4;
+}
+.hero-color {
+  display: block;
+  font-size: 7px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--hero-color);
+  margin: 5px 0 9px;
+}
+.hero-card > small {
+  display: block;
+  font-size: 7px;
+  color: #96afa1;
+  line-height: 1.4;
+  min-height: 10px;
+}
+.hero-assigned {
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  font-size: 6px;
+  color: var(--hero-color);
+  border: 1px solid color-mix(in srgb, var(--hero-color) 40%, transparent);
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: #122630;
+}
+.roster-tip {
+  text-align: center;
+  font-size: 8px;
+  color: #75958b;
+  line-height: 1.8;
+  margin: 18px 0 0;
+}
+@media (min-width: 1700px) {
+  .roster-shell {
+    max-width: 1480px;
+    grid-template-columns: 440px 1fr;
+    gap: 100px;
+  }
+  .hero-art {
+    height: 170px;
+  }
+  .hero-card > strong {
+    font-size: 14px;
+  }
+  .roster-story h1 {
+    font-size: 58px;
+  }
+}
+@media (max-width: 1150px) {
+  .roster-shell {
+    padding: 35px;
+    gap: 32px;
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
+  .hero-art {
+    height: 115px;
+  }
+  .hero-card {
+    padding: 8px 3px 10px;
+  }
+  .hero-card > strong {
+    font-size: 11px;
+  }
+  .hero-card > small {
+    font-size: 6px;
+  }
+  .roster-story h1 {
+    font-size: 40px;
+  }
+  .roster-grid {
+    gap: 8px;
+  }
+  .roster-slots {
+    gap: 5px;
+  }
+  .roster-slots > button {
+    padding: 8px 5px;
+    gap: 5px;
+  }
+  .slot-portrait {
+    width: 28px;
+    height: 28px;
+  }
+  .roster-slots strong {
+    font-size: 9px;
+  }
+  .roster-slots small {
+    font-size: 5px;
+    letter-spacing: 0;
+  }
+  .roster-slots i {
+    display: none;
+  }
+  .power-slot {
+    min-width: 119px;
+  }
+  .power-slot b {
+    max-width: 75px;
+  }
+}
+@media (max-height: 760px) and (min-width: 701px) {
+  .roster-shell {
+    padding-block: 24px;
+    gap: 35px;
+  }
+  .roster-story .intro-crest {
+    height: 35px;
+    margin-bottom: 12px;
+  }
+  .roster-story h1 {
+    font-size: 37px;
+    margin: 13px 0;
+  }
+  .chosen-profile {
+    height: 106px;
+    margin: 6px 0;
+  }
+  .chosen-portrait {
+    height: 110px;
+    width: 96px;
+  }
+  .chosen-power {
+    margin-bottom: 15px;
+    padding: 9px;
+  }
+  .roster-story > p {
+    font-size: 10px;
+    margin: 0;
+  }
+  .hero-art {
+    height: 115px;
+  }
+  .roster-controls {
+    margin-top: 10px;
+  }
+}
+@media (max-width: 700px) {
+  .roster-shell {
+    display: flex;
+    flex-direction: column;
+    padding: 28px 20px;
+    gap: 28px;
+    align-items: stretch;
+  }
+  .roster-story {
+    max-width: 500px;
+    margin: auto;
+  }
+  .roster-story h1 {
+    font-size: 36px;
+  }
+  .roster-story > .intro-crest,
+  .roster-story > .eyebrow,
+  .roster-story > p {
+    display: none;
+  }
+  .chosen-profile {
+    height: 110px;
+  }
+  .chosen-portrait {
+    height: 120px;
+    width: 105px;
+  }
+  .roster-story .primary {
+    position: sticky;
+    bottom: 0;
+  }
+  .roster-gallery {
+    max-width: 540px;
+    margin: auto;
+    width: 100%;
+  }
+  .hero-art {
+    height: 90px;
+  }
+  .hero-card > strong {
+    font-size: 9px;
+  }
+  .hero-card > small {
+    font-size: 5px;
+  }
+  .roster-grid {
+    gap: 6px;
+  }
+  .roster-slots strong {
+    font-size: 10px;
+  }
+  .hero-color {
+    font-size: 6px;
+  }
+  .power-slot {
+    min-width: 108px;
+  }
+  .power-slot > span {
+    font-size: 22px;
+    width: 20px;
+  }
+  .power-slot b {
+    font-size: 8px;
+    max-width: 67px;
+  }
+  .power-slot small {
+    font-size: 6px;
+  }
+  .power-slot > kbd {
+    font-size: 5px;
+  }
+  .loadout .ammo-tip {
+    display: none;
+  }
+  .assault-alert {
+    width: 92vw;
+    padding: 19px 20px;
+  }
+  .assault-alert > strong {
+    font-size: 19px;
+  }
+  .assault-alert .eyebrow {
+    font-size: 6px;
+  }
+}
+.power-slot {
+  min-width: 169px;
+  gap: 10px;
+  padding-inline: 11px;
+}
+.power-slot > span {
+  font-size: 28px;
+  width: 31px;
+}
+.power-slot b {
+  font-size: 11px;
+  max-width: 112px;
+}
+.power-slot small {
+  font-size: 8px;
+}
+.power-slot > kbd {
+  font-size: 6px;
+}
+.loadout-divider {
+  margin-inline: 3px;
+}
+@media (max-width: 1000px) {
+  .power-slot {
+    min-width: 149px;
+  }
+  .power-slot b {
+    font-size: 10px;
+    max-width: 95px;
+  }
+  .power-slot > span {
+    font-size: 25px;
+    width: 25px;
+  }
+}
+@media (max-width: 700px) {
+  .power-slot {
+    min-width: 130px;
+    padding-inline: 8px;
+  }
+  .power-slot b {
+    font-size: 9px;
+    max-width: 83px;
+  }
+  .power-slot small {
+    font-size: 7px;
+  }
+  .power-slot > span {
+    font-size: 23px;
+    width: 22px;
+  }
+}

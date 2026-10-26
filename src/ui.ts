@@ -2,12 +2,13 @@ import type { Simulation } from "./simulation";
 import type { Renderer } from "./renderer";
 import { SIDES, distance, type Order, type Side } from "./types";
 import { EQUIPMENT } from "./workshop";
+import { HEROES, hero } from "./heroes";
 export const fox = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M7 8l14 9h6l14-9-3 25-14 10L10 33z" fill="currentColor"/><path d="M12 27l9 3 3 9 3-9 9-3-6 9-6 5-6-5z" fill="#172b35"/><path d="M14 23l6 3m8 0 6-3" stroke="#172b35" stroke-width="3"/></svg>`;
 const icons = {
   bow: "➶",
   sword: "⚔",
   ballista: "↠",
-  wood: "✦",
+  wood: `<svg viewBox="0 0 28 28" fill="none" aria-hidden="true"><ellipse cx="14" cy="14" rx="10" ry="12" fill="#bc9146" stroke="#eed39b" stroke-width="1.5"/><ellipse cx="14" cy="14" rx="6.5" ry="8.5" stroke="#765a2e" stroke-width="1.5"/><path d="M14 7v14m-4-10h6a2 2 0 0 1 0 4h-4a2 2 0 0 0 0 4h6" stroke="#f3d995" stroke-width="1.5"/></svg>`,
   repair: "⚒",
   shield: "⬡",
 };
@@ -21,18 +22,21 @@ export class UI {
   mini!: HTMLCanvasElement;
   mode = "";
   shopSignature = "";
+  selectedSlot = 0;
+  lastGold = 0;
+  squadSignature = "";
   constructor(
     public getGame: () => Simulation,
     public renderer: Renderer,
     public restart: () => void,
   ) {
-    this.hud.innerHTML = `<header class="topbar"><div class="brand"><span class="brand-fox">${fox}</span><div>LE CHÂTEAU <span>DU RENARD</span><small>LA DERNIÈRE VEILLE</small></div></div><div class="wave-panel"><div class="wave-top"><span class="live-dot"></span><span id="phase-label">PRÉPARATION</span><span id="wave-count">VEILLE 01</span></div><div class="wave-track"><i id="wave-progress"></i></div><div class="wave-bottom"><span id="wave-description">Les ténèbres approchent</span><span id="wave-timer">10 s</span></div></div><div class="top-actions"><div class="resource"><span>${icons.wood}</span><strong id="wood">0</strong><small>POINTS</small></div><button class="icon-btn" id="sound" title="Activer les sons" aria-label="Activer les sons">♪</button><button class="icon-btn" id="help" title="Commandes (H)" aria-label="Afficher les commandes">?</button><button class="icon-btn" id="pause" title="Pause (Échap)" aria-label="Mettre en pause">Ⅱ</button></div></header>
+    this.hud.innerHTML = `<header class="topbar"><div class="brand"><span class="brand-fox">${fox}</span><div>LE CHÂTEAU <span>DU RENARD</span><small>LA DERNIÈRE VEILLE</small></div></div><div class="wave-panel"><div class="wave-top"><span class="live-dot"></span><span id="phase-label">PRÉPARATION</span><span id="wave-count">VEILLE 01</span></div><div class="wave-track"><i id="wave-progress"></i></div><div class="wave-bottom"><span id="wave-description">Les ténèbres approchent</span><span id="wave-timer">10 s</span></div></div><div class="top-actions"><div class="resource"><span>${icons.wood}</span><strong id="wallet">0</strong><small>OR</small></div><button class="icon-btn" id="sound" title="Activer les sons" aria-label="Activer les sons">♪</button><button class="icon-btn" id="help" title="Commandes (H)" aria-label="Afficher les commandes">?</button><button class="icon-btn" id="pause" title="Pause (Échap)" aria-label="Mettre en pause">Ⅱ</button></div></header>
  <aside class="squad-panel"><div class="eyebrow">LA GARDE DU RENARD <span>03</span></div><div id="squad"></div><button id="orders-button" class="text-btn"><span>⚑</span> Ordres aux compagnons <kbd>Tab</kbd></button><div id="orders" class="orders hidden"></div></aside>
  <aside class="map-panel"><div class="map-title"><span class="eyebrow">LES QUATRE FRONTS</span><span class="map-compass">N ↑</span></div><div class="map-wrap"><canvas id="minimap" width="240" height="190" aria-label="Mini-carte des défenseurs et des ennemis"></canvas><span class="map-corner tl"></span><span class="map-corner br"></span></div><div id="fronts" class="fronts"></div><div class="map-legend"><span><i class="dot gold"></i>Vous</span><span><i class="dot green"></i>Alliés</span><span><i class="dot red"></i>Ennemis</span></div></aside>
  <section class="fort-status"><div class="eyebrow"><span>INTÉGRITÉ DU CHÂTEAU</span><strong id="integrity">100 %</strong></div><div class="fort-track"><i id="integrity-bar"></i></div><div id="fort-detail">Les remparts tiennent bon.</div></section>
  <div class="objective"><span class="objective-mark">✦</span><div class="eyebrow">VOTRE MISSION</div><strong id="objective-title">Tenez jusqu’à l’aube.</strong><p id="objective-text">Défendez les quatre fronts avec votre garde.</p></div>
- <div id="notice" class="notice hidden"></div><div id="context" class="context hidden"></div>
- <footer class="bottom-bar"><div class="chapter"><span class="chapter-line"></span><div><small>LES TERRES OUBLIÉES</small><strong>La nuit des braises</strong><span>Prototype jouable · v0.2</span></div></div><div class="loadout"><div id="weapon2" class="weapon active"><span class="weapon-icon">${icons.bow}</span><span>Arc de garde<small id="ammo">24 flèches</small></span></div><div class="ammo-tip"><kbd>E</kbd><span>Près d’une réserve<br>Remplir le carquois</span></div><div class="loadout-divider"></div><div class="dodge"><kbd>Espace</kbd><span>Esquive</span><i id="dodge-bar"></i></div></div><div class="bottom-tools"><button id="shop-button"><span>⚒</span> Ouvrier <kbd>B</kbd></button><span>Molette · zoom</span></div></footer><div class="key-strip"><span><kbd>ZQSD / WASD</kbd> Se déplacer</span><span><kbd>CLIC</kbd> Attaquer</span><span><kbd>E</kbd> Interagir</span><span><kbd>R</kbd> Recharger / réparer</span></div><section id="drawer" class="drawer hidden"></section>`;
+ <div id="notice" class="notice hidden"></div><div id="assault-alert" class="assault-alert hidden" role="status" aria-live="polite"><span class="assault-emblem">⚑</span><div class="eyebrow" id="assault-wave"></div><strong id="assault-text"></strong><span class="assault-rule"></span></div><div id="context" class="context hidden"></div>
+ <footer class="bottom-bar"><div class="chapter"><span class="chapter-line"></span><div><small>LES TERRES OUBLIÉES</small><strong>La nuit des braises</strong><span>Prototype jouable · v0.3</span></div></div><div class="loadout"><div id="weapon2" class="weapon active"><span class="weapon-icon">${icons.bow}</span><span>Arc de garde<small id="ammo">24 flèches</small></span></div><div class="loadout-divider"></div><div id="power-slot" class="power-slot"><kbd>CLIC DROIT</kbd><span id="power-symbol">✹</span><div><b id="power-name">Flèche explosive</b><small id="power-state">Prêt</small></div><i id="power-ready"></i></div><div class="loadout-divider"></div><div class="dodge"><kbd>Espace</kbd><span>Esquive</span><i id="dodge-bar"></i></div></div><div class="bottom-tools"><button id="shop-button"><span>⚒</span> Ouvrier <kbd>B</kbd></button><span>Molette · zoom</span></div></footer><div class="key-strip"><span><kbd>ZQSD / WASD</kbd> Se déplacer</span><span><kbd>CLIC G.</kbd> Tirer</span><span><kbd>CLIC D.</kbd> Pouvoir</span><span><kbd>E</kbd> Interagir</span><span><kbd>R</kbd> Recharger / réparer</span></div><section id="drawer" class="drawer hidden"></section>`;
     this.mini = this.hud.querySelector("#minimap")!;
     this.hud
       .querySelector("#pause")!
@@ -51,6 +55,9 @@ export class UI {
       .addEventListener("click", () =>
         window.dispatchEvent(new Event("toggle-audio")),
       );
+    window.addEventListener("hero-art-ready", () => {
+      if (!this.getGame().started) this.renderIntro();
+    });
     this.renderIntro();
   }
   set(id: string, text: string) {
@@ -118,7 +125,7 @@ export class UI {
     const drawer = this.hud.querySelector("#drawer")!;
     drawer.classList.toggle("hidden", !this.shopOpen && !this.helpOpen);
     if (this.helpOpen) {
-      drawer.innerHTML = `<button class="drawer-close" aria-label="Fermer">×</button><div class="eyebrow">LE MANUEL DE LA GARDE</div><h2>Chaque geste compte.</h2><dl><dt>ZQSD / WASD / flèches</dt><dd>Déplacez-vous librement sur la plateforme, entièrement au niveau des remparts.</dd><dt>Souris + clic gauche</dt><dd>Visez et tirez à l’arc. Vos trois défenseurs sont des archers.</dd><dt>Espace</dt><dd>Esquive rapide et courte invulnérabilité.</dd><dt>E</dt><dd>Remplissez votre carquois près de la réserve centrale. Entre les manches, parlez à Gaspard, l’ouvrier.</dd><dt>B · L’ouvrier</dt><dd>Entre les manches, choisissez une baliste ou une réserve, puis cliquez sur un emplacement éclairé. Gaspard va chercher la commande, l’apporte et l’installe. Échap annule le choix d’emplacement sans dépense.</dd><dt>Baliste achetée</dt><dd>E pour la servir ; clic pour tirer ; R pour recharger (2 points) ; F pour la transporter ; E pour la déposer.</dd><dt>Maintenir R à pied</dt><dd>Répare une structure proche en dépensant des points.</dd><dt>Tab / H / Échap</dt><dd>Ordres individuels / aide / pause.</dd></dl><p class="drawer-note">Départ : trois arcs, une réserve et aucune baliste. Chaque ennemi vaincu rapporte 10 points (20 pour une brute), puis 45 points à la fin de la manche. Gaspard arrive par l’escalier central pendant la pause de 60 secondes. Une livraison en cours termine avant le prochain assaut.</p>`;
+      drawer.innerHTML = `<button class="drawer-close" aria-label="Fermer">×</button><div class="eyebrow">LE MANUEL DE LA GARDE</div><h2>Chaque geste compte.</h2><dl><dt>ZQSD / WASD / flèches</dt><dd>Déplacez-vous librement sur la plateforme, entièrement au niveau des remparts.</dd><dt>Souris + clic gauche</dt><dd>Visez et tirez à l’arc. La corde se tend pendant 0,24 s, puis la flèche est lâchée.</dd><dt>Clic droit · Pouvoir</dt><dd>Utilise le pouvoir de votre archer : ${hero(this.getGame().player.hero).powerName}. Il consomme des flèches et possède sa propre recharge, affichée en bas. Les alliés utilisent leur pouvoir seuls.</dd><dt>Espace</dt><dd>Esquive rapide et courte invulnérabilité.</dd><dt>E</dt><dd>Remplissez votre carquois près de la réserve centrale. Entre les manches, parlez à Gaspard, l’ouvrier.</dd><dt>B · L’ouvrier</dt><dd>Entre les manches, choisissez une baliste ou une réserve, puis cliquez sur un emplacement éclairé. Gaspard va chercher la commande, l’apporte et l’installe. Échap annule le choix d’emplacement sans dépense.</dd><dt>Baliste achetée</dt><dd>E pour la servir ; clic pour tirer ; R pour recharger (2 pièces) ; F pour la transporter ; E pour la déposer.</dd><dt>Maintenir R à pied</dt><dd>Répare une structure proche en dépensant des pièces.</dd><dt>Tab / H / Échap</dt><dd>Ordres individuels / aide / pause.</dd></dl><p class="drawer-note">Départ : trois arcs, une réserve et aucune baliste. Chaque ennemi vaincu rapporte 10 pièces (20 pour une brute), puis 45 pièces à la fin de la manche. Gaspard arrive par l’escalier central pendant la pause de 60 secondes. Une livraison en cours termine avant le prochain assaut.</p>`;
     } else if (this.shopOpen) {
       const g = this.getGame(),
         w = g.workshop,
@@ -130,7 +137,7 @@ export class UI {
           : g.wave === 0
             ? "Gaspard montera par l’escalier central après la première manche. Pour le moment : vos arcs et la réserve centrale."
             : "L’ouvrier revient entre les manches.";
-      drawer.innerHTML = `<button class="drawer-close" aria-label="Fermer">×</button><div class="eyebrow">GASPARD · OUVRIER DU CHÂTEAU</div><h2>À votre service.</h2><p class="worker-status">${status}</p><div class="shop-points">${Math.floor(g.resources)} <span>points disponibles</span></div><div class="eyebrow shop-section">ÉQUIPEMENT À LIVRER</div><div class="upgrade-list equipment-list">${EQUIPMENT.map((u) => `<button data-equipment="${u.id}" ${!canBuy || g.resources < u.cost || !g.availableSites(u.id).length ? "disabled" : ""}><span class="upgrade-icon">${u.id === "ballista" ? "↠" : "➶"}</span><span><strong>${u.name}</strong><small>${u.description}</small><em>${g.availableSites(u.id).length} emplacement(s) libre(s)</em></span><b>${u.cost} pts</b></button>`).join("")}</div><div class="eyebrow shop-section">AMÉLIORATIONS</div><div class="upgrade-list">${g.upgrades.map((u) => `<button data-upgrade="${u.id}" ${!canBuy || g.resources < u.cost || u.level >= 3 ? "disabled" : ""}><span class="upgrade-icon">${u.id === "walls" ? "⬡" : u.id === "repair" ? "⚒" : "↠"}</span><span><strong>${u.name}</strong><small>${u.description}</small><em>Niveau ${u.level} / 3 · livraison par Gaspard</em></span><b>${u.level >= 3 ? "MAX" : `${u.cost} pts`}</b></button>`).join("")}</div><button id="next-wave" class="primary small" ${g.phase !== "preparation" || w.busy || g.placement ? "disabled" : ""}>Appeler la prochaine vague <span>→</span></button>`;
+      drawer.innerHTML = `<button class="drawer-close" aria-label="Fermer">×</button><div class="eyebrow">GASPARD · OUVRIER DU CHÂTEAU</div><h2>À votre service.</h2><p class="worker-status">${status}</p><div class="shop-wallet">${Math.floor(g.coins)} <span>pièces disponibles</span></div><div class="eyebrow shop-section">ÉQUIPEMENT À LIVRER</div><div class="upgrade-list equipment-list">${EQUIPMENT.map((u) => `<button data-equipment="${u.id}" ${!canBuy || g.coins < u.cost || !g.availableSites(u.id).length ? "disabled" : ""}><span class="upgrade-icon">${u.id === "ballista" ? "↠" : "➶"}</span><span><strong>${u.name}</strong><small>${u.description}</small><em>${g.availableSites(u.id).length} emplacement(s) libre(s)</em></span><b>${u.cost} pièces</b></button>`).join("")}</div><div class="eyebrow shop-section">AMÉLIORATIONS</div><div class="upgrade-list">${g.upgrades.map((u) => `<button data-upgrade="${u.id}" ${!canBuy || g.coins < u.cost || u.level >= 3 ? "disabled" : ""}><span class="upgrade-icon">${u.id === "walls" ? "⬡" : u.id === "repair" ? "⚒" : "↠"}</span><span><strong>${u.name}</strong><small>${u.description}</small><em>Niveau ${u.level} / 3 · livraison par Gaspard</em></span><b>${u.level >= 3 ? "MAX" : `${u.cost} pièces`}</b></button>`).join("")}</div><button id="next-wave" class="primary small" ${g.phase !== "preparation" || w.busy || g.placement ? "disabled" : ""}>Appeler la prochaine vague <span>→</span></button>`;
       for (const button of drawer.querySelectorAll<HTMLButtonElement>(
         "[data-equipment]",
       ))
@@ -164,10 +171,34 @@ export class UI {
       });
   }
   renderIntro() {
-    this.overlay.className = "intro-overlay";
-    this.overlay.innerHTML = `<div class="intro-card"><div class="intro-crest">${fox}</div><div class="eyebrow">UN CHÂTEAU. TROIS DÉFENSEURS. UNE DERNIÈRE VEILLE.</div><h1>La nuit<br>nous appartient<span>.</span></h1><p>Au-delà des remparts, les ombres se rassemblent.<br>Trois archers. Une réserve. Vos remparts.<br>Le Château du Renard ne tombera pas ce soir.</p><button id="start-game" class="primary">Prendre la garde <span>→</span></button><div class="intro-details"><span>1 archer + 2 compagnons IA</span><i>✦</i><span>Défense coopérative</span></div><small class="intro-footnote">Prototype vertical · Univers médiéval fantastique<br>Déplacement ZQSD / WASD · Souris pour viser</small></div><div class="intro-caption"><span class="live-dot"></span> LE CHÂTEAU DU RENARD <span>RÉGION DES MARCHES DU NORD</span></div>`;
+    const g = this.getGame(),
+      selected = g.defenders[this.selectedSlot],
+      chosen = hero(selected.hero);
+    this.overlay.className = "intro-overlay roster-overlay";
+    this.overlay.innerHTML = `<div class="roster-shell"><section class="roster-story"><div class="intro-crest">${fox}</div><div class="eyebrow">LE CHÂTEAU DU RENARD · LA DERNIÈRE VEILLE</div><h1>Choisissez<br>votre garde<span>.</span></h1><p>Huit capuches. Huit façons de tenir la nuit.<br>Choisissez votre archer et vos deux compagnons.</p><div class="chosen-profile"><div class="chosen-portrait" style="--hero-color:${chosen.color}"><img src="${this.renderer.heroPortrait(chosen.id)}" alt="${chosen.name}, archer à capuche ${chosen.colorName}"></div><div><small>CAPUCHE ${chosen.colorName.toUpperCase()}</small><h2>${chosen.name}</h2><p>${chosen.title}</p></div></div><div class="chosen-power" style="--hero-color:${chosen.color}"><span>${chosen.symbol}</span><div><strong>${chosen.powerName}</strong><p>${chosen.description}</p><small>Clic droit · ${chosen.cooldown} s de recharge · ${chosen.ammoCost} flèche${chosen.ammoCost > 1 ? "s" : ""}</small></div></div><button id="start-game" class="primary" ${!this.renderer.ready ? "disabled" : ""}>${this.renderer.assetError ? "Une illustration n’a pas chargé" : this.renderer.ready ? "Prendre la garde" : "Chargement des illustrations…"} <span>→</span></button><div class="intro-details"><span>1 joueur + 2 compagnons autonomes</span><i>✦</i><span>Sans boss</span></div><small class="roster-controls">ZQSD / WASD · Clic gauche : arc · Clic droit : pouvoir</small></section><section class="roster-gallery"><div class="gallery-heading"><div class="eyebrow">COMPOSEZ VOTRE GARDE</div><span>03 / 03</span></div><div class="roster-slots" role="group" aria-label="Membre de la garde à personnaliser">${g.defenders.map((d) => `<button data-roster-slot="${d.id}" aria-label="Personnage ${d.id === 0 ? "J1" : `IA${d.id}`}" aria-pressed="${this.selectedSlot === d.id}" style="--hero-color:${d.color}"><div class="slot-portrait" style="background-image:url('${this.renderer.heroPortrait(d.hero)}')"></div><span><small>${d.id === 0 ? "VOUS · J1" : `COMPAGNON · IA${d.id}`}</small><strong>${d.name}</strong></span><i>${this.selectedSlot === d.id ? "✎" : "✓"}</i></button>`).join("")}</div><div class="roster-grid" role="group" aria-label="Huit archers à capuche">${HEROES.map(
+      (h) => {
+        const assigned = g.defenders.find((d) => d.hero === h.id);
+        return `<button class="hero-card" data-hero="${h.id}" aria-label="${h.name}, capuche ${h.colorName}, ${h.powerName}" aria-pressed="${selected.hero === h.id}" style="--hero-color:${h.color}">${assigned ? `<span class="hero-assigned">${assigned.id === 0 ? "J1" : `IA${assigned.id}`}</span>` : ""}<div class="hero-art"><img src="${this.renderer.heroPortrait(h.id)}" alt=""></div><strong>${h.name}</strong><span class="hero-color">${h.colorName}</span><small>${h.symbol} ${h.powerName}</small></button>`;
+      },
+    ).join(
+      "",
+    )}</div><p class="roster-tip">Choisissez d’abord un membre de la garde, puis sa capuche.<br>Chaque archer apporte son propre pouvoir. Tous sont disponibles.</p></section></div>`;
+    for (const b of this.overlay.querySelectorAll<HTMLButtonElement>(
+      "[data-roster-slot]",
+    ))
+      b.onclick = () => {
+        this.selectedSlot = Number(b.dataset.rosterSlot);
+        this.renderIntro();
+      };
+    for (const b of this.overlay.querySelectorAll<HTMLButtonElement>(
+      "[data-hero]",
+    ))
+      b.onclick = () => {
+        g.selectHero(this.selectedSlot, Number(b.dataset.hero));
+        this.renderIntro();
+      };
     this.overlay.querySelector("#start-game")!.addEventListener("click", () => {
-      const g = this.getGame();
+      if (!this.renderer.ready) return;
       g.started = true;
       g.remaining = 25;
       this.overlay.className = "hidden";
@@ -206,16 +237,66 @@ export class UI {
     this.overlay.className = "hidden";
     this.overlay.innerHTML = "";
     this.shopOpen = false;
+    this.helpOpen = false;
     this.orderOpen = false;
+    this.selectedSlot = 0;
     this.drawDrawer();
     this.drawOrders();
+    this.renderIntro();
   }
   update(now: number) {
     if (now - this.last < 100) return;
     this.last = now;
     const g = this.getGame(),
       p = g.player;
-    this.set("wood", String(Math.floor(g.resources)));
+    this.set("wallet", String(g.coins));
+    if (g.coins > this.lastGold)
+      this.hud.querySelector("#wallet")?.animate(
+        [
+          { color: "#fff0bb", transform: "scale(1.18)" },
+          { color: "#edddbc", transform: "scale(1)" },
+        ],
+        { duration: 450 },
+      );
+    this.lastGold = g.coins;
+    const ability = hero(p.hero),
+      slot = this.hud.querySelector<HTMLElement>("#power-slot")!;
+    this.set("power-name", ability.powerName);
+    this.set("power-symbol", ability.symbol);
+    this.set(
+      "power-state",
+      p.mounted !== null
+        ? "Quittez la baliste"
+        : p.carried !== null
+          ? "Déposez la baliste"
+          : p.ammo < ability.ammoCost
+            ? "Carquois vide"
+            : p.abilityCooldown > 0
+              ? `${Math.ceil(p.abilityCooldown)} s`
+              : `Prêt · ${ability.ammoCost} flèche${ability.ammoCost > 1 ? "s" : ""}`,
+    );
+    slot.style.setProperty("--hero-color", ability.color);
+    slot.classList.toggle(
+      "cooling",
+      p.abilityCooldown > 0 ||
+        p.ammo < ability.ammoCost ||
+        p.mounted !== null ||
+        p.carried !== null,
+    );
+    (this.hud.querySelector("#power-ready") as HTMLElement).style.width =
+      `${100 * (1 - p.abilityCooldown / ability.cooldown)}%`;
+    const alert = this.hud.querySelector("#assault-alert")!;
+    alert.classList.toggle("hidden", !g.started || !g.waveAlert || g.paused);
+    if (g.waveAlert) {
+      this.set(
+        "assault-wave",
+        `VAGUE ${String(g.wave).padStart(2, "0")} · ALERTE AUX REMPARTS`,
+      );
+      this.set("assault-text", g.waveAlert.text);
+      (alert as HTMLElement).style.opacity = String(
+        Math.min(1, g.waveAlert.life / 0.45),
+      );
+    }
     this.set(
       "wave-count",
       `VAGUE ${String(Math.max(1, g.wave)).padStart(2, "0")}`,
@@ -256,13 +337,31 @@ export class UI {
           ? "Les défenses ont besoin de réparations."
           : "Les remparts tiennent bon.",
     );
-    const squad = this.hud.querySelector("#squad")!;
-    squad.innerHTML = g.defenders
-      .map(
-        (d) =>
-          `<div class="defender ${d.id === 0 ? "human" : ""} ${d.dead > 0 ? "fallen" : ""}"><div class="portrait portrait-${d.id}"><img src="${import.meta.env.BASE_URL}assets/archers-walk.png" alt=""><span>${d.id === 0 ? "J1" : "IA"}</span></div><div class="defender-info"><div><strong>${d.name}</strong><span>${d.id === 0 ? "VOUS" : SIDES[d.side].toUpperCase()}</span></div><div class="health"><i style="width:${(d.hp / d.maxHp) * 100}%;background:${d.color}"></i></div><small>${d.dead > 0 ? `À terre · ${Math.ceil(d.dead)} s` : d.mounted !== null ? "Sert une baliste" : d.carried !== null ? "Déplace une baliste" : d.id === 0 ? `${d.ammo} flèches · Archer` : { auto: "Défense autonome", follow: "Vous suit", defend: "Défend le front", repair: "Répare les défenses", ballista: "Sert une baliste" }[d.order]}</small></div></div>`,
-      )
-      .join("");
+    const squadKey =
+      this.getGame()
+        .defenders.map((d) =>
+          [
+            d.hero,
+            d.hp,
+            d.ammo,
+            d.mounted,
+            d.carried,
+            d.order,
+            d.side,
+            Math.ceil(d.dead),
+          ].join(","),
+        )
+        .join("|") + this.renderer.walkAtlasReady;
+    if (squadKey !== this.squadSignature) {
+      this.squadSignature = squadKey;
+      const squad = this.hud.querySelector("#squad")!;
+      squad.innerHTML = g.defenders
+        .map(
+          (d) =>
+            `<div class="defender ${d.id === 0 ? "human" : ""} ${d.dead > 0 ? "fallen" : ""}"><div class="portrait hero-portrait" style="border-color:${d.color};background-image:url('${this.renderer.heroPortrait(d.hero)}')"><span>${d.id === 0 ? "J1" : "IA"}</span></div><div class="defender-info"><div><strong>${d.name}</strong><span>${d.id === 0 ? "VOUS" : SIDES[d.side].toUpperCase()}</span></div><div class="health"><i style="width:${(d.hp / d.maxHp) * 100}%;background:${d.color}"></i></div><small>${d.dead > 0 ? `À terre · ${Math.ceil(d.dead)} s` : d.mounted !== null ? "Sert une baliste" : d.carried !== null ? "Déplace une baliste" : d.id === 0 ? `${d.ammo} flèches · Archer` : { auto: "Défense autonome", follow: "Vous suit", defend: "Défend le front", repair: "Répare les défenses", ballista: "Sert une baliste" }[d.order]}</small></div></div>`,
+        )
+        .join("");
+    }
     this.hud.querySelector("#fronts")!.innerHTML = SIDES.map((s, i) => {
       const n = g.enemies.filter((e) => e.hp > 0 && e.side === i).length;
       return `<span class="${n ? "attacked" : ""}"><i></i>${s}<b>${n || "—"}</b></span>`;
@@ -305,7 +404,7 @@ export class UI {
         )
       )
         context =
-          "<kbd>R</kbd> Maintenir pour réparer <span>·</span> Consomme des points";
+          "<kbd>R</kbd> Maintenir pour réparer <span>·</span> Consomme des pièces";
     }
     const ctx = this.hud.querySelector("#context")!;
     ctx.innerHTML = context;
@@ -316,7 +415,7 @@ export class UI {
       this.helpOpen = false;
       this.drawDrawer();
     }
-    const signature = `${g.phase}:${g.workshop.state}:${g.workshop.job?.kind}:${Math.floor(g.resources)}:${g.ballistas.length}:${g.stocks.length}:${g.upgrades.map((u) => u.level).join()}`;
+    const signature = `${g.phase}:${g.workshop.state}:${g.workshop.job?.kind}:${Math.floor(g.coins)}:${g.ballistas.length}:${g.stocks.length}:${g.upgrades.map((u) => u.level).join()}`;
     if (this.shopOpen && signature !== this.shopSignature) {
       this.shopSignature = signature;
       this.drawDrawer();
@@ -331,7 +430,7 @@ export class UI {
       "objective-text",
       g.phase === "preparation" && g.wave > 0
         ? "Retrouvez Gaspard à l’escalier central. E ou B pour commander."
-        : "Trois archers, une réserve. Gagnez des points pour équiper la garde.",
+        : "Trois archers, une réserve. Gagnez des pièces pour équiper la garde.",
     );
     this.drawOverlay();
   }

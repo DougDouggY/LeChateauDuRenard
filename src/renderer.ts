@@ -5,6 +5,9 @@ import {
   type Enemy,
   type Ballista,
   type Wall,
+  type Stock,
+  type CombatEffect,
+  type PowerId,
   clamp,
 } from "./types";
 import {
@@ -16,7 +19,8 @@ import {
   elevation,
 } from "./map";
 import { projectileHeight } from "./combat";
-import { archerFrame, ARCHER_ROWS } from "./animation";
+import { archerFrame, WALK_ROWS, SHOT_ROWS, spriteFrame } from "./animation";
+import { hero, WALK_SHEETS, SHOT_SHEETS } from "./heroes";
 import type { Workshop } from "./workshop";
 type Ctx = CanvasRenderingContext2D;
 const P = (x: number, y: number, z = 0) => ({ x, y: y * 0.72 - z });
@@ -109,6 +113,33 @@ export class Renderer {
   walkAtlasReady = false;
   workerAtlas = new Image();
   workerAtlasReady = false;
+  heroWalk = [new Image(), new Image()];
+  heroShot = [new Image(), new Image()];
+  arrowAtlas = new Image();
+  arrowAtlasReady = false;
+  floorProps = new Image();
+  floorPropsReady = false;
+  portraits = new Map<number, string>();
+  assetError = false;
+  get ready() {
+    return (
+      this.heroAssetsReady &&
+      this.atlasReady &&
+      this.propsReady &&
+      this.tileReady &&
+      this.ballistaAtlasReady &&
+      this.workerAtlasReady
+    );
+  }
+  get heroAssetsReady() {
+    return (
+      [...this.heroWalk, ...this.heroShot].every(
+        (i) => i.complete && i.naturalWidth > 0,
+      ) &&
+      this.arrowAtlasReady &&
+      this.floorPropsReady
+    );
+  }
   lastTime = 0;
   constructor(public canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext("2d")!;
@@ -127,11 +158,71 @@ export class Renderer {
     this.tile.src = import.meta.env.BASE_URL + "assets/courtyard.png";
     this.ballistaAtlas.onload = () => (this.ballistaAtlasReady = true);
     this.ballistaAtlas.src = import.meta.env.BASE_URL + "assets/ballistas.png";
-    this.walkAtlas.onload = () => (this.walkAtlasReady = true);
-    this.walkAtlas.src = import.meta.env.BASE_URL + "assets/archers-walk.png";
+    for (const group of [0, 1]) {
+      this.heroWalk[group].onload = () => {
+        this.walkAtlasReady = this.heroWalk.every(
+          (i) => i.complete && i.naturalWidth > 0,
+        );
+        if (group === 0) this.walkAtlas = this.heroWalk[0];
+        this.portraits.clear();
+      };
+      this.heroWalk[group].src = import.meta.env.BASE_URL + WALK_SHEETS[group];
+      this.heroShot[group].src = import.meta.env.BASE_URL + SHOT_SHEETS[group];
+    }
+    this.arrowAtlas.onload = () => (this.arrowAtlasReady = true);
+    this.arrowAtlas.src = import.meta.env.BASE_URL + "assets/arrows-v3.png";
+    this.floorProps.onload = () => (this.floorPropsReady = true);
+    this.floorProps.src =
+      import.meta.env.BASE_URL + "assets/floor-props-v3.png";
     this.workerAtlas.onload = () => (this.workerAtlasReady = true);
     this.workerAtlas.src = import.meta.env.BASE_URL + "assets/worker-walk.png";
+    for (const image of [
+      this.atlas,
+      this.props,
+      this.tile,
+      this.ballistaAtlas,
+      this.workerAtlas,
+      ...this.heroWalk,
+      ...this.heroShot,
+      this.arrowAtlas,
+      this.floorProps,
+    ]) {
+      const loaded = image.onload;
+      image.onload = (e) => {
+        if (loaded) loaded.call(image, e);
+        window.dispatchEvent(new Event("hero-art-ready"));
+      };
+      image.onerror = () => {
+        this.assetError = true;
+        window.dispatchEvent(new Event("hero-art-ready"));
+      };
+    }
     this.resize();
+  }
+  heroPortrait(id: number): string {
+    if (this.portraits.has(id)) return this.portraits.get(id)!;
+    const h = hero(id),
+      img = this.heroWalk[h.group];
+    if (!img.complete || !img.naturalWidth) return "";
+    const canvas = document.createElement("canvas");
+    canvas.width = 200;
+    canvas.height = 220;
+    const c = canvas.getContext("2d")!,
+      row = WALK_ROWS[h.group][h.row];
+    c.drawImage(
+      img,
+      0,
+      (row.y * img.height) / 1254,
+      img.width / 4,
+      (row.h * img.height) / 1254,
+      0,
+      0,
+      200,
+      220,
+    );
+    const url = canvas.toDataURL();
+    this.portraits.set(id, url);
+    return url;
   }
   resize() {
     this.w = window.innerWidth;
@@ -252,30 +343,6 @@ export class Renderer {
       c.fillStyle = "#a4b4ad55";
       c.fillText(label, p.x, p.y);
     }
-    // Central access stairwell for the quartermaster. The rest of the deck is flat.
-    const stair = P(CENTRAL_STAIR.x, CENTRAL_STAIR.y, FLOOR_HEIGHT);
-    path(
-      c,
-      [
-        [stair.x - 55, stair.y - 37],
-        [stair.x + 55, stair.y - 37],
-        [stair.x + 55, stair.y + 39],
-        [stair.x - 55, stair.y + 39],
-      ],
-      "#10232c",
-      "#89928b",
-      7,
-    );
-    for (let i = 0; i < 7; i++) {
-      const yy = stair.y - 31 + i * 9;
-      c.fillStyle = `rgb(${49 + i * 5},${65 + i * 5},${74 + i * 4})`;
-      c.fillRect(stair.x - 47, yy, 94, 7);
-      line(c, [stair.x - 46, yy], [stair.x + 46, yy], "#a1a89a77", 1);
-    }
-    c.font = "10px sans-serif";
-    c.fillStyle = "#c2bea2";
-    c.textAlign = "center";
-    c.fillText("ESCALIER CENTRAL", stair.x, stair.y + 64);
     // A forest border with layered, illustrated evergreen silhouettes.
     for (let i = 0; i < 150; i++) {
       const x = r() * 2400,
@@ -357,6 +424,10 @@ export class Renderer {
     c.scale(this.zoom, this.zoom);
     c.drawImage(this.terrain, 0, 0);
     const objects: { depth: number; draw: () => void }[] = [];
+    objects.push({
+      depth: CENTRAL_STAIR.y * 0.72 - 10,
+      draw: () => this.centralAccess(c, g),
+    });
     for (const w of g.walls)
       objects.push({ depth: w.y * 0.72 + 6, draw: () => this.wall(c, w) });
     for (const pos of [
@@ -384,7 +455,7 @@ export class Renderer {
     for (const stock of g.stocks)
       objects.push({
         depth: stock.y * 0.72,
-        draw: () => this.stock(c, stock.x, stock.y, g.time),
+        draw: () => this.stock(c, stock, g.time),
       });
     if (g.workshop.state !== "hidden")
       objects.push({
@@ -431,33 +502,56 @@ export class Renderer {
       c.translate(pp.x, pp.y);
       c.rotate(dir);
       if (q.kind === "fire") {
-        const grad = c.createRadialGradient(0, 0, 1, 0, 0, 23);
-        grad.addColorStop(0, "#ffca6e");
-        grad.addColorStop(1, "#f77d2200");
-        c.fillStyle = grad;
+        const glow = c.createRadialGradient(0, 0, 1, 0, 0, 23);
+        glow.addColorStop(0, "#ffcc76");
+        glow.addColorStop(1, "#fb752000");
+        c.fillStyle = glow;
         c.fillRect(-23, -23, 46, 46);
-        ellipse(c, 0, 0, 7, 6, "#ffc763", "#e3693d");
-      } else {
-        line(
-          c,
-          [-(q.kind === "bolt" ? 40 : 22), 0],
-          [8, 0],
-          q.team === "ally" ? "#cfdce1" : "#d4a57e",
-          q.kind === "bolt" ? 5 : 2,
+        ellipse(c, 0, 0, 7, 6, "#ffd18a", "#d86b3f");
+      } else if (this.arrowAtlasReady) {
+        const slots: Record<PowerId, number> = {
+          explosive: 1,
+          multishot: 0,
+          fire: 2,
+          frost: 3,
+          piercing: 4,
+          moon: 5,
+          poison: 6,
+          lightning: 7,
+        };
+        const index = q.power ? slots[q.power] : 0;
+        if (q.power) {
+          const colors: Record<PowerId, string> = {
+            explosive: "#f4b366",
+            multishot: "#b9dca7",
+            fire: "#ff8b4e",
+            frost: "#a2e7ff",
+            piercing: "#ca9bff",
+            moon: "#f0e3a7",
+            poison: "#a6da6f",
+            lightning: "#9ef5f2",
+          };
+          c.shadowColor = colors[q.power];
+          c.shadowBlur = 12;
+          line(c, [-64, 0], [-30, 0], colors[q.power], 3);
+          c.shadowBlur = 0;
+        }
+        if (q.team === "enemy") c.filter = "brightness(.7) sepia(.5)";
+        const w = q.kind === "bolt" ? 83 : q.power ? 64 : 53;
+        c.drawImage(
+          this.arrowAtlas,
+          ((index % 4) * this.arrowAtlas.width) / 4,
+          ((index < 4 ? 390 : 675) * this.arrowAtlas.height) / 1254,
+          this.arrowAtlas.width / 4,
+          (190 * this.arrowAtlas.height) / 1254,
+          -w * 0.86,
+          -w * 0.3,
+          w,
+          w * 0.6,
         );
-        path(
-          c,
-          [
-            [11, 0],
-            [1, -5],
-            [1, 5],
-          ],
-          q.team === "ally" ? "#b1e5ee" : "#dfb192",
-          "",
-          0,
-        );
-        line(c, [-25, -4], [-18, 0], "#8bacb4", 3);
-      }
+        c.filter = "none";
+      } else
+        line(c, [-28, 0], [8, 0], q.team === "ally" ? "#e5d9bc" : "#d89773", 3);
       c.restore();
     }
     for (const q of g.particles) {
@@ -467,6 +561,7 @@ export class Renderer {
       c.fillRect(pp.x, pp.y, q.size, q.size);
     }
     c.globalAlpha = 1;
+    for (const effect of g.effects) this.combatEffect(c, effect);
     // Warm pooled torch light, drawn over actual geometry.
     for (const pos of [
       [570, 560],
@@ -517,6 +612,91 @@ export class Renderer {
     vignette.addColorStop(1, "#05131a99");
     c.fillStyle = vignette;
     c.fillRect(0, 0, this.w, this.h);
+  }
+  combatEffect(c: Ctx, e: CombatEffect) {
+    const progress = 1 - e.life / e.total,
+      p = P(e.x, e.y, elevation(e));
+    c.save();
+    c.globalAlpha = Math.min(1, e.life / 0.2);
+    if (e.kind === "coins") {
+      c.translate(p.x, p.y - 65 - progress * 42);
+      ellipse(c, -19, 0, 6, 8, "#dab25a", "#715b30", 1.5);
+      ellipse(c, -19, 0, 3, 5, "", "#ffe4a0", 1);
+      c.font = "bold 13px sans-serif";
+      c.fillStyle = "#ffe0a0";
+      c.fillText(`+${e.amount} or`, -8, 4);
+    } else if (e.kind === "ammo" && e.target) {
+      const to = P(e.target.x, e.target.y, FLOOR_HEIGHT + 70);
+      for (let i = 0; i < 3; i++) {
+        const t = clamp(progress * 1.4 - i * 0.12, 0, 1),
+          x = p.x + (to.x - p.x) * t,
+          y = p.y - 55 + (to.y - (p.y - 55)) * t - Math.sin(t * Math.PI) * 35;
+        c.save();
+        c.translate(x, y);
+        c.rotate(Math.atan2(to.y - p.y, to.x - p.x));
+        line(c, [-12, 0], [9, 0], "#f7dda4", 2);
+        path(
+          c,
+          [
+            [13, 0],
+            [6, -3],
+            [6, 3],
+          ],
+          "#f4e9c8",
+          "",
+          0,
+        );
+        c.restore();
+      }
+    } else if (e.kind === "lightning" && e.points) {
+      c.shadowBlur = 12;
+      c.shadowColor = e.color;
+      for (let i = 1; i < e.points.length; i++) {
+        const a = P(
+            e.points[i - 1].x,
+            e.points[i - 1].y,
+            elevation(e.points[i - 1]) + 38,
+          ),
+          b = P(e.points[i].x, e.points[i].y, elevation(e.points[i]) + 38);
+        c.beginPath();
+        c.moveTo(a.x, a.y);
+        c.lineTo((a.x + b.x) / 2 + 13, (a.y + b.y) / 2 - 20);
+        c.lineTo((a.x + b.x) / 2 - 9, (a.y + b.y) / 2 + 8);
+        c.lineTo(b.x, b.y);
+        c.strokeStyle = e.color;
+        c.lineWidth = 3;
+        c.stroke();
+      }
+    } else if (e.kind === "heal") {
+      ellipse(c, p.x, p.y - 20 - progress * 40, 23, 9, "", e.color, 2);
+      if (e.amount) {
+        c.fillStyle = e.color;
+        c.font = "bold 12px sans-serif";
+        c.fillText(`+${e.amount}`, p.x - 11, p.y - 90 - progress * 20);
+      }
+    } else {
+      const radius = e.radius * (0.25 + 0.75 * progress);
+      c.translate(p.x, p.y - 18);
+      c.scale(1, 0.72);
+      const glow = c.createRadialGradient(0, 0, 1, 0, 0, radius);
+      glow.addColorStop(0, e.kind === "explosion" ? "#ffe4aabb" : "#a8eaff55");
+      glow.addColorStop(1, e.kind === "explosion" ? "#f9a25100" : "#a8eaff00");
+      c.fillStyle = glow;
+      c.fillRect(-radius, -radius, radius * 2, radius * 2);
+      ellipse(c, 0, 0, radius, radius, "", e.color, 3 * (1 - progress) + 1);
+      if (e.kind === "frost")
+        for (let i = 0; i < 8; i++) {
+          const a = (i * Math.PI) / 4;
+          line(
+            c,
+            [Math.cos(a) * radius * 0.65, Math.sin(a) * radius * 0.65],
+            [Math.cos(a) * radius, Math.sin(a) * radius],
+            e.color,
+            2,
+          );
+        }
+    }
+    c.restore();
   }
   wall(c: Ctx, w: Wall) {
     const p = P(w.x, w.y),
@@ -732,52 +912,110 @@ export class Renderer {
     ellipse(c, x - 4, y - 6, 1.5, 1.5, "#294457");
     ellipse(c, x + 4, y - 6, 1.5, 1.5, "#294457");
   }
-  stock(c: Ctx, x: number, y: number, t: number) {
-    const p = P(x, y, FLOOR_HEIGHT);
+  centralAccess(c: Ctx, g: Simulation) {
+    const p = P(CENTRAL_STAIR.x, CENTRAL_STAIR.y, FLOOR_HEIGHT),
+      open = g.workshop.state === "hidden" ? 0 : g.workshop.emergence;
     c.save();
     c.translate(p.x, p.y);
-    ellipse(c, 4, 8, 43, 17, "#263c3d");
-    path(
-      c,
-      [
-        [-36, -8],
-        [-25, -20],
-        [35, -20],
-        [42, -9],
-        [42, 18],
-        [-36, 18],
-      ],
-      "#846346",
-      "#293b3c",
-      3,
-    );
-    for (let i = 0; i < 5; i++)
-      line(c, [-32, -4 + i * 5], [38, -4 + i * 5], "#ae8656", 1.4);
-    for (const xx of [-24, 24]) line(c, [xx, -17], [xx, 18], "#3c4844", 5);
-    for (let i = 0; i < 7; i++) {
-      line(
-        c,
-        [-22 + i * 7, -19],
-        [-24 + i * 7, -62 - (i % 3) * 5],
-        "#c3a475",
-        3,
+    ellipse(c, 7, 8, 85, 42, "#0d222b77");
+    if (this.floorPropsReady) {
+      c.filter = "brightness(.86) saturate(.82)";
+      c.drawImage(
+        this.floorProps,
+        this.floorProps.width / 2,
+        0,
+        this.floorProps.width / 2,
+        this.floorProps.height,
+        -92,
+        -113,
+        184,
+        184,
       );
+      c.filter = "none";
+    } else {
+      c.fillStyle = "#253c48";
+      c.fillRect(-55, -35, 110, 70);
+    }
+    if (open < 1) {
+      c.save();
+      c.globalAlpha = (1 - open) * 0.94;
+      c.translate(0, -open * 42);
       path(
         c,
         [
-          [-24 + i * 7, -66 - (i % 3) * 5],
-          [-28 + i * 7, -54 - (i % 3) * 5],
-          [-20 + i * 7, -54 - (i % 3) * 5],
+          [-49, -15],
+          [8, -35],
+          [54, -9],
+          [-4, 21],
         ],
-        "#a0b5bb",
-        "#344d56",
-        1,
+        "#614a35",
+        "#283b42",
+        3,
       );
+      for (let i = 0; i < 6; i++)
+        line(
+          c,
+          [-42 + i * 10, -15 - i * 3],
+          [-1 + i * 10, 15 - i * 3],
+          "#ae8b5e",
+          2,
+        );
+      line(c, [-35, -15], [-2, 11], "#283b40", 5);
+      line(c, [8, -31], [42, -7], "#283b40", 5);
+      c.restore();
     }
-    c.font = "bold 13px sans-serif";
+    if (open > 0) {
+      const glow = c.createRadialGradient(0, -4, 1, 0, -4, 84);
+      glow.addColorStop(
+        0,
+        `rgba(255,179,78,${open * (0.21 + Math.sin(g.time * 5) * 0.025)})`,
+      );
+      glow.addColorStop(1, "#ffb25300");
+      c.globalCompositeOperation = "screen";
+      c.fillStyle = glow;
+      c.fillRect(-84, -88, 168, 168);
+      c.globalCompositeOperation = "source-over";
+    }
+    c.font = "9px sans-serif";
+    c.fillStyle = "#b8b89c";
     c.textAlign = "center";
-    c.fillStyle = "#d7c6a0";
-    c.fillText("FLÈCHES", 0, 38);
+    c.fillText("ACCÈS DE L’OUVRIER", 0, 86);
+    c.restore();
+  }
+  stock(c: Ctx, stock: Stock, t: number) {
+    const p = P(stock.x, stock.y, FLOOR_HEIGHT);
+    c.save();
+    c.translate(p.x, p.y);
+    ellipse(c, 6, 7, 55, 19, "#0c202b88");
+    if (stock.pulse > 0) {
+      const glow = c.createRadialGradient(0, -20, 3, 0, -20, 80);
+      glow.addColorStop(0, `rgba(255,213,136,${stock.pulse * 0.35})`);
+      glow.addColorStop(1, "#ffd58800");
+      c.fillStyle = glow;
+      c.fillRect(-80, -100, 160, 160);
+    }
+    if (this.floorPropsReady) {
+      c.filter = "brightness(.9) saturate(.85)";
+      c.drawImage(
+        this.floorProps,
+        0,
+        0,
+        this.floorProps.width / 2,
+        this.floorProps.height,
+        -66,
+        -119 - stock.pulse * 2,
+        132,
+        132,
+      );
+      c.filter = "none";
+    } else {
+      c.fillStyle = "#9e784d";
+      c.fillRect(-30, -30, 60, 35);
+    }
+    c.font = "9px sans-serif";
+    c.textAlign = "center";
+    c.fillStyle = "#e0cfaa";
+    c.fillText("RÉSERVE DE FLÈCHES", 0, 31);
     c.restore();
   }
   ballista(c: Ctx, b: Ballista, t: number) {
@@ -942,7 +1180,7 @@ export class Renderer {
       c.font = "bold 10px sans-serif";
       c.textAlign = "center";
       c.fillText(
-        kind === "ballista" ? "BALISTE · 90 PTS" : "RÉSERVE · 40 PTS",
+        kind === "ballista" ? "BALISTE · 90 OR" : "RÉSERVE · 40 OR",
         p.x,
         p.y + 46,
       );
@@ -953,6 +1191,11 @@ export class Renderer {
     const p = P(w.x, w.y, FLOOR_HEIGHT),
       frame = w.moving ? Math.floor(w.walk) % 4 : 0;
     c.save();
+    if (w.emergence < 1) {
+      c.beginPath();
+      c.rect(p.x - 65, p.y - 170, 130, 179);
+      c.clip();
+    }
     c.translate(p.x, p.y + (1 - w.emergence) * 60);
     c.globalAlpha = w.emergence;
     ellipse(c, 0, 0, 23, 9, "#10242ba0");
@@ -1029,24 +1272,57 @@ export class Renderer {
         c.globalAlpha = 1;
       }
     }
+    if (!ally && (a.burn > 0 || a.poison > 0 || a.slow > 0 || a.stun > 0)) {
+      const color =
+        a.stun > 0
+          ? "#9ef5f2"
+          : a.slow > 0
+            ? "#99dcf5"
+            : a.poison > 0
+              ? "#b4d476"
+              : "#f8a15f";
+      ellipse(c, 0, 0, 25, 11, "", color, 2);
+      c.fillStyle = color;
+      c.font = "bold 12px sans-serif";
+      c.textAlign = "center";
+      c.fillText(
+        a.stun > 0 ? "ϟ" : a.slow > 0 ? "❄" : a.poison > 0 ? "☠" : "♨",
+        0,
+        -146,
+      );
+    }
     if (a.hurt > 0) c.filter = "brightness(1.7) sepia(.3)";
     if (ally && this.walkAtlasReady) {
-      const frame = archerFrame(a),
-        row = ARCHER_ROWS[a.id];
+      const state = spriteFrame(a),
+        img = state.shooting
+          ? this.heroShot[state.group]
+          : this.heroWalk[state.group];
+      const ready = img.complete && img.naturalWidth > 0;
+      const fallback = this.heroWalk[state.group],
+        sheet = ready ? img : fallback;
+      const row =
+        state.shooting && ready
+          ? SHOT_ROWS[state.group][state.row]
+          : WALK_ROWS[state.group][state.row];
       c.save();
-      const facing = a.moving ? a.moveFacing : a.facing;
+      const facing =
+        a.shot || a.releaseFlash > 0
+          ? a.facing
+          : a.moving
+            ? a.moveFacing
+            : a.facing;
       if (Math.cos(facing) < -0.05) c.scale(-1, 1);
       if (a.dodge > 0) c.rotate(0.28);
       c.drawImage(
-        this.walkAtlas,
-        (frame * this.walkAtlas.width) / 4,
-        (row.y * this.walkAtlas.height) / 1254,
-        this.walkAtlas.width / 4,
-        (row.h * this.walkAtlas.height) / 1254,
+        sheet,
+        (state.frame * sheet.width) / 4,
+        (row.y * sheet.height) / 1254,
+        sheet.width / 4,
+        (row.h * sheet.height) / 1254,
         -49,
-        -130,
+        -128,
         98,
-        130,
+        128,
       );
       c.restore();
     } else if (this.atlasReady) {
@@ -1074,25 +1350,6 @@ export class Renderer {
       c.restore();
     } else this.fallbackActor(c, a, bob);
     c.filter = "none";
-    if (ally && a.attacking > 0 && a.mounted === null) {
-      c.save();
-      c.translate(0, -60);
-      c.scale(1, 0.72);
-      c.rotate(a.facing);
-      line(c, [12, 0], [55, 0], "#e6d2a6", 2);
-      path(
-        c,
-        [
-          [61, 0],
-          [52, -4],
-          [52, 4],
-        ],
-        "#d4e1dc",
-        "",
-        0,
-      );
-      c.restore();
-    }
     const labelY = this.atlasReady
       ? !ally && a.kind === "brute"
         ? -154

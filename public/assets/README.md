@@ -1,12 +1,16 @@
 # Assets du prototype
 
-Images produites pour ce projet avec l’outil de génération d’images de la session, en s’appuyant sur la direction artistique de la référence utilisateur.
+Images originales produites pour cette session avec l’outil de génération d’images, dans la direction donnée par la référence utilisateur. Elles sont utilisées dans le jeu ; les captures réelles sont créées séparément dans `artifacts/`.
 
-- `archers-walk.png` : quatre colonnes × trois lignes, un cycle de quatre poses de marche pour chacun des trois archers bleu, vert et violet. Le cadrage de chaque ligne et le cycle sont définis dans `src/animation.ts`. Personnages sans épée ni bouclier, quiver et arc visibles.
-- `worker-walk.png` : quatre poses de marche du même ouvrier Gaspard, en tablier, portant sa caisse de livraison. Une ligne de quatre cellules.
-- `characters.png` : ancien atlas de personnages, toujours utilisé pour les cinq familles d’ennemis. Ses trois anciens défenseurs ne sont plus rendus.
-- `props.png` : atlas de tours, baliste, forge et arbres. Seuls les éléments nécessaires à la scène actuelle sont utilisés ; la forge n’apparaît plus dans le château.
-- `ballistas.png` : huit orientations (N, NE, E, SE, S, SO, O, NO) des balistes achetées ; aucune n’est présente au départ.
-- `courtyard.png` : texture de la plateforme surélevée et de la pierre des remparts.
+- `hood-walk-a.png` : 4 × 4 poses de marche, archers à capuche ambre, verte, bleue et rouge.
+- `hood-walk-b.png` : 4 × 4 poses de marche, archers à capuche violette, ivoire, noire et turquoise.
+- `hood-shot-a.png`, `hood-shot-b.png` : les mêmes huit archers, chacun avec repos, début de tension, pleine tension et lâcher. Le lâcher du sprite est lié à l’émission réelle du projectile.
+- `arrows-v3.png` : huit flèches horizontales (normale, explosive, feu, glace, perforation, lune, poison, foudre).
+- `floor-props-v3.png` : coffre de ravitaillement et accès central de l’ouvrier, sur socles de pierre, avec ombres et lumière ajoutées au rendu.
+- `worker-walk.png` : quatre poses de Gaspard transportant sa caisse.
+- `characters.png` : les cinq familles d’ennemis. Les anciens personnages alliés de cet atlas ne sont pas utilisés.
+- `props.png` : tours et forêt ; la forge contenue dans cet atlas n’est pas affichée.
+- `ballistas.png` : huit orientations des balistes achetées, absentes au départ.
+- `courtyard.png` : texture du plateau et de la pierre des remparts.
 
-Les sprites sont cadrés à l’exécution par Canvas `drawImage`, sans modifier les images sources. Les originaux de génération restent dans `/workspace/generated_images` pour cette session. Les captures de jeu réel sont produites séparément dans `artifacts/` par les tests navigateur.
+Le cadrage est effectué à l’exécution par Canvas. Les lignes transparentes et les positions des poses sont définies dans `src/animation.ts`. Les portraits sont mis en cache à partir de ces mêmes sprites. Les sources de génération sont conservées dans `/workspace/generated_images` pour la session.

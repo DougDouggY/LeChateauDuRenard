@@ -45,13 +45,13 @@ function intermission(g: Simulation) {
   run(g, 2);
   assert.equal(g.workshop.ready, true);
 }
-test("start is three archers, one supply, eight empty sockets and no points or ballistas", () => {
+test("start is three archers, one supply, eight empty sockets and no gold or ballistas", () => {
   const g = setup();
   assert.equal(g.defenders.length, 3);
   assert.ok(g.defenders.every((d) => d.weapon === 2 && d.ammo === 24));
   assert.equal(g.ballistas.length, 0);
   assert.equal(g.stocks.length, 1);
-  assert.equal(g.resources, 0);
+  assert.equal(g.coins, 0);
   assert.equal(g.availableSites("ballista").length, 8);
   assert.equal(g.workshop.state, "hidden");
   assert.equal(g.buy("arrows"), false);
@@ -95,16 +95,16 @@ test("arrows fired from the center clear the parapet and hit an exterior enemy",
   run(g, 1.6);
   assert.ok(e.hp < e.maxHp);
 });
-test("kills award points immediately without inaccessible outside pickups", () => {
+test("kills award gold immediately without inaccessible outside pickups", () => {
   const g = setup();
   g.spawn("goblin", 0);
   g.damageEnemy(g.enemies[0], 1000);
-  assert.equal(g.resources, 10);
+  assert.equal(g.coins, 10);
   g.damageEnemy(g.enemies[0], 1000);
-  assert.equal(g.resources, 10);
+  assert.equal(g.coins, 10);
   g.spawn("brute", 1);
   g.damageEnemy(g.enemies[1], 1000);
-  assert.equal(g.resources, 30);
+  assert.equal(g.coins, 30);
   assert.equal(g.pickups.length, 0);
 });
 test("walk cycle uses distinct sprite frames, stops on release and does not walk against a wall", () => {
@@ -136,6 +136,7 @@ test("short clicks consume ammo, empty bows cannot fire and the one reserve refi
   i.clicked = true;
   g.update(1 / 60, i, { x: g.player.x + 300, y: g.player.y });
   assert.equal(g.player.ammo, 23);
+  run(g, 0.3);
   g.player.ammo = 0;
   g.player.cooldown = 0;
   const count = g.projectiles.length;
@@ -167,17 +168,17 @@ test("worker actually ascends the central access and accepts interaction only be
 test("purchasing reserves a valid socket, charges once, and delivers before installing", () => {
   const g = setup();
   intermission(g);
-  g.resources = 200;
+  g.coins = 200;
   assert.equal(g.requestPlacement("ballista"), true);
-  assert.equal(g.resources, 200);
+  assert.equal(g.coins, 200);
   assert.equal(g.placeOrder({ x: 1200, y: 1200 }), false);
-  assert.equal(g.resources, 200);
+  assert.equal(g.coins, 200);
   assert.equal(g.placeOrder(POSTS[0]), true);
-  assert.equal(g.resources, 110);
+  assert.equal(g.coins, 110);
   assert.equal(g.ballistas.length, 0);
   assert.equal(g.workshop.state, "fetching");
   assert.equal(g.workshop.order("ballista", POSTS[1]), false);
-  assert.equal(g.resources, 110);
+  assert.equal(g.coins, 110);
   run(g, 1);
   assert.equal(g.ballistas.length, 0);
   assert.equal(g.workshop.job?.kind, "ballista");
@@ -190,7 +191,7 @@ test("purchasing reserves a valid socket, charges once, and delivers before inst
 test("reserve delivery adds a usable new refill location and upgrades apply after delivery", () => {
   const g = setup();
   intermission(g);
-  g.resources = 300;
+  g.coins = 300;
   assert.equal(g.workshop.order("stock", SUPPLY_POSTS[1]), true);
   run(g, 9);
   assert.equal(g.stocks.length, 2);
@@ -207,7 +208,7 @@ test("reserve delivery adds a usable new refill location and upgrades apply afte
 test("wave countdown and manual launch wait for an ongoing delivery", () => {
   const g = setup();
   intermission(g);
-  g.resources = 150;
+  g.coins = 150;
   g.workshop.order("ballista", POSTS[4]);
   g.remaining = 0.1;
   g.startWave();
@@ -225,7 +226,7 @@ test("wave countdown and manual launch wait for an ongoing delivery", () => {
 test("delivered ballista can mount, fire, reload, carry across the deck and drop", () => {
   const g = setup();
   intermission(g);
-  g.resources = 200;
+  g.coins = 200;
   g.workshop.order("ballista", POSTS[1]);
   run(g, 11);
   const b = g.ballistas[0];
@@ -240,11 +241,11 @@ test("delivered ballista can mount, fire, reload, carry across the deck and drop
   assert.equal(g.player.mounted, 0);
   g.shoot(g.player, { x: b.x, y: 200 });
   assert.equal(b.loaded, false);
-  const points = g.resources;
+  const points = g.coins;
   const i = empty();
   i.pressed.add("r");
   g.update(1 / 60, i, { x: b.x, y: 200 });
-  assert.equal(g.resources, points - 2);
+  assert.equal(g.coins, points - 2);
   assert.ok(b.reload > 0);
   run(g, 3.4);
   assert.equal(b.loaded, true);
@@ -282,24 +283,24 @@ test("bow allies defend before equipment exists and refill autonomously", () => 
 test("worker rejects unaffordable orders and equipment on an occupied socket", () => {
   const g = setup();
   intermission(g);
-  g.resources = 89;
+  g.coins = 89;
   assert.equal(g.requestPlacement("ballista"), false);
   assert.equal(g.workshop.order("ballista", POSTS[0]), false);
-  g.resources = 200;
+  g.coins = 200;
   g.installBallista(POSTS[0]);
   assert.equal(g.workshop.order("ballista", POSTS[0]), false);
-  assert.equal(g.resources, 200);
+  assert.equal(g.coins, 200);
 });
-test("repairs consume points and rebuild a damaged section", () => {
+test("repairs consume gold and rebuild a damaged section", () => {
   const g = setup();
-  g.resources = 20;
+  g.coins = 20;
   const w = g.walls[2];
   w.hp = 0;
   g.player.x = w.x;
   g.player.y = w.y + 65;
   assert.equal(g.repair(g.player, 1), true);
   assert.ok(w.hp > 0);
-  assert.ok(g.resources < 20);
+  assert.ok(g.coins < 20);
 });
 test("dodge is collision aware and briefly invulnerable; total defeat still ends the game", () => {
   const g = setup(),
@@ -316,14 +317,14 @@ test("dodge is collision aware and briefly invulnerable; total defeat still ends
   run(g, 0.1);
   assert.equal(g.phase, "defeat");
 });
-test("a completed first round rewards points, creates the worker and schedules multiple fronts", () => {
+test("a completed first round rewards gold, creates the worker and schedules multiple fronts", () => {
   const g = setup();
   g.startWave();
   assert.deepEqual(g.fronts, [0]);
   g.spawnLeft = 0;
   run(g, 0.1);
   assert.equal(g.phase, "preparation");
-  assert.equal(g.resources, 45);
+  assert.equal(g.coins, 45);
   assert.equal(g.workshop.state, "arriving");
   run(g, 2);
   g.startWave();

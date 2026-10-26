@@ -28,7 +28,7 @@ export function updateAllies(g: Simulation, dt: number) {
       const s = [...g.stocks].sort(
         (a, b) => distance(a, d) - distance(b, d),
       )[0];
-      if (distance(s, d) < 70) d.ammo = 24;
+      if (distance(s, d) < 70) g.refill(d, s);
       else g.navigate(d, s, dt, 210);
       continue;
     }
@@ -44,6 +44,7 @@ export function updateAllies(g: Simulation, dt: number) {
         .sort((a, b) => distance(a, d) - distance(b, d))[0];
       if (near) {
         d.weapon = 2;
+        if (g.phase === "assault") g.useAbility(d, near);
         g.shoot(d, near);
       }
       continue;
@@ -59,7 +60,7 @@ export function updateAllies(g: Simulation, dt: number) {
           g.phase === "assault" &&
           g.integrity < 0.4)) &&
       damaged.length &&
-      g.resources > 3
+      g.coins > 3
     ) {
       g.release(d);
       const w = damaged[(d.id - 1) % damaged.length];
@@ -91,6 +92,7 @@ export function updateAllies(g: Simulation, dt: number) {
       .sort((a, b) => distance(a, d) - distance(b, d))[0];
     if (near) {
       d.weapon = 2;
+      if (g.phase === "assault") g.useAbility(d, near);
       g.shoot(d, near);
       continue;
     }
@@ -120,6 +122,7 @@ export function updateAllies(g: Simulation, dt: number) {
       .sort((a, b) => distance(a, d) - distance(b, d))[0];
     if (enemy) {
       d.weapon = 2;
+      if (g.phase === "assault") g.useAbility(d, enemy);
       g.shoot(d, enemy);
     }
   }
@@ -127,7 +130,8 @@ export function updateAllies(g: Simulation, dt: number) {
 export function updateEnemies(g: Simulation, dt: number) {
   for (const e of g.enemies) {
     e.moving = false;
-    if (e.hp <= 0) continue;
+    if (e.hp <= 0 || e.stun > 0) continue;
+    const speedFactor = e.slow > 0 ? 0.4 : 1;
     const walls = g.walls.filter((w) => w.side === e.side);
     const gate = walls.find((w) => w.gate)!;
     const melee = e.kind === "brute" || e.kind === "runner";
@@ -145,7 +149,12 @@ export function updateEnemies(g: Simulation, dt: number) {
         .sort((a, b) => distance(a, e) - distance(b, e))[0];
       if (!target) continue;
       if (distance(e, target) > 55)
-        g.navigate(e, target, dt, e.kind === "runner" ? 150 : 65);
+        g.navigate(
+          e,
+          target,
+          dt,
+          (e.kind === "runner" ? 150 : 65) * speedFactor,
+        );
       else if (e.cooldown <= 0) {
         g.damageDefender(target, e.kind === "brute" ? 26 : 13);
         e.cooldown = 1.1;
@@ -158,7 +167,8 @@ export function updateEnemies(g: Simulation, dt: number) {
     };
     if (distance(e, goal) > 22) {
       const dir = toward(e, goal);
-      const speed = melee ? (e.kind === "runner" ? 145 : 62) : 70;
+      const speed =
+        (melee ? (e.kind === "runner" ? 145 : 62) : 70) * speedFactor;
       move(e, dir.x * speed * dt, dir.y * speed * dt, e.radius, g.walls);
       e.walk += (dt * speed) / 25;
       e.moving = true;

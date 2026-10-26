@@ -21,17 +21,19 @@ const input: Input = {
   mouse: { x: innerWidth / 2, y: innerHeight / 2 },
   down: false,
   clicked: false,
+  abilityPressed: false,
 };
 const ui = new UI(
   () => game,
   renderer,
   () => {
-    game = new Simulation();
-    game.started = true;
+    game = new Simulation(game.defenders.map((d) => d.hero));
+    game.started = false;
     game.remaining = 25;
     lastShot = 0;
     lastWave = 0;
     input.down = false;
+    input.abilityPressed = false;
     input.keys.clear();
   },
 );
@@ -90,7 +92,7 @@ window.addEventListener("keydown", (e) => {
   if (k === "escape") {
     if (game.placement) {
       game.placement = null;
-      game.notice("Choix d’emplacement annulé. Aucun point dépensé.");
+      game.notice("Choix d’emplacement annulé. Aucune pièce dépensée.");
     } else ui.togglePause();
   }
   if (k === "tab") ui.toggleOrders();
@@ -102,6 +104,7 @@ window.addEventListener("blur", () => {
   input.keys.clear();
   input.pressed.clear();
   input.down = false;
+  input.abilityPressed = false;
   if (game.started && game.phase !== "defeat") {
     game.paused = true;
     ui.mode = "";
@@ -112,15 +115,21 @@ canvas.addEventListener("mousemove", (e) => {
   input.mouse = { x: e.clientX, y: e.clientY };
 });
 canvas.addEventListener("mousedown", (e) => {
+  input.mouse = { x: e.clientX, y: e.clientY };
+  if (e.button === 2) {
+    if (game.placement) game.placement = null;
+    else input.abilityPressed = true;
+  }
   if (e.button === 0) {
     input.down = true;
     input.clicked = true;
   }
 });
-window.addEventListener("mouseup", () => (input.down = false));
+window.addEventListener("mouseup", (e) => {
+  if (e.button === 0) input.down = false;
+});
 canvas.addEventListener("contextmenu", (e) => {
   e.preventDefault();
-  game.placement = null;
 });
 canvas.addEventListener(
   "wheel",
@@ -159,6 +168,7 @@ function frame(now: number) {
     if (!consumed) {
       input.pressed.clear();
       input.clicked = false;
+      input.abilityPressed = false;
       consumed = true;
     }
   }

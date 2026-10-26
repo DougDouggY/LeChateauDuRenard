@@ -83,11 +83,11 @@ export class Workshop {
     )
       return false;
     const cost = this.cost(kind);
-    if (this.g.resources < cost) {
-      this.g.notice("Pas assez de points.");
+    if (this.g.coins < cost) {
+      this.g.notice("Pas assez de pièces.");
       return false;
     }
-    this.g.resources -= cost;
+    this.g.coins -= cost;
     this.job = {
       kind,
       target: target
@@ -147,7 +147,11 @@ export class Workshop {
         this.job = null;
         if (job.kind === "ballista") this.g.installBallista(job.target);
         else if (job.kind === "stock")
-          this.g.stocks.push({ ...job.target, id: this.g.stocks.length });
+          this.g.stocks.push({
+            ...job.target,
+            id: this.g.stocks.length,
+            pulse: 0,
+          });
         else this.g.applyUpgrade(job.kind);
         this.g.particlesAt(this, "#e5c080", 18);
         this.g.notice(

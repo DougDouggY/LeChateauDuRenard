@@ -10,9 +10,13 @@ import {
   type EnemyKind,
   type Vec,
   type Upgrade,
-  type Stock,
   type EquipmentKind,
   type PurchaseKind,
+  type PowerId,
+  type BowShot,
+  type CombatEffect,
+  type WaveAlert,
+  type Stock,
   distance,
   toward,
   clamp,
@@ -31,6 +35,8 @@ import {
 import { updateAllies, updateEnemies } from "./strategy";
 import { Workshop } from "./workshop";
 import { projectileHeight } from "./combat";
+import { HEROES, DEFAULT_ROSTER, hero } from "./heroes";
+import { powerImpact, effect } from "./powers";
 export class Simulation {
   time = 0;
   tick = 0;
@@ -42,14 +48,16 @@ export class Simulation {
   projectiles: Projectile[] = [];
   particles: Particle[] = [];
   pickups: Pickup[] = [];
+  effects: CombatEffect[] = [];
+  waveAlert: WaveAlert | null = null;
   wave = 0;
   phase: "preparation" | "assault" | "defeat" = "preparation";
   remaining = 10;
   spawnLeft = 0;
   spawnTimer = 0;
   fronts: Side[] = [0];
-  resources = 0;
-  stocks: Stock[] = [{ id: 0, x: 1320, y: 1130 }];
+  coins = 0;
+  stocks: Stock[] = [{ id: 0, x: 1320, y: 1130, pulse: 0 }];
   workshop = new Workshop(this);
   placement: EquipmentKind | null = null;
   shopRequested = false;
@@ -97,11 +105,28 @@ export class Simulation {
       level: 0,
     },
   ];
-  constructor() {
-    this.defenders = ["Aëlan", "Brune", "Osric"].map((name, i) => ({
+  constructor(roster: number[] = DEFAULT_ROSTER) {
+    const selected: number[] = [];
+    for (let slot = 0; slot < 3; slot++) {
+      const requested = roster[slot];
+      selected.push(
+        Number.isInteger(requested) &&
+          requested >= 0 &&
+          requested < HEROES.length &&
+          !selected.includes(requested)
+          ? requested
+          : HEROES.find((h) => !selected.includes(h.id))!.id,
+      );
+    }
+    this.defenders = selected.map((heroId, i) => ({
+      hero: heroId,
+      abilityCooldown: 0,
+      shot: null,
+      releaseFlash: 0,
+      repairCredit: 0,
       id: i,
-      name,
-      color: ["#d79a51", "#6bb6a0", "#9b9bda"][i],
+      name: hero(heroId).name,
+      color: hero(heroId).color,
       x: 1200 + (i - 1) * 80,
       y: 1200 + (i ? 45 : 0),
       hp: 160,
@@ -129,6 +154,42 @@ export class Simulation {
       attacking: 0,
     }));
   }
+  selectHero(slot: number, heroId: number): boolean {
+    if (
+      this.started ||
+      !Number.isInteger(slot) ||
+      slot < 0 ||
+      slot > 2 ||
+      !Number.isInteger(heroId) ||
+      !HEROES[heroId]
+    )
+      return false;
+    const current = this.defenders[slot],
+      other = this.defenders.find((d) => d.id !== slot && d.hero === heroId),
+      old = current.hero;
+    const assign = (d: Defender, id: number) => {
+      d.hero = id;
+      d.name = hero(id).name;
+      d.color = hero(id).color;
+      d.abilityCooldown = 0;
+      d.shot = null;
+    };
+    if (other) assign(other, old);
+    assign(current, heroId);
+    return true;
+  }
+  refill(d: Defender, stock: Stock): boolean {
+    if (d.dead > 0 || distance(d, stock) > 90 || d.ammo >= 24) return false;
+    const amount = 24 - d.ammo;
+    d.ammo = 24;
+    stock.pulse = 1;
+    effect(this, "ammo", stock, "#eddaa0", 40, 0.55, {
+      target: { x: d.x, y: d.y },
+      amount,
+    });
+    this.particlesAt(stock, "#e5cca0", 7);
+    return true;
+  }
   installBallista(p: Vec) {
     const side = sideOf(p);
     const b: Ballista = {
@@ -155,7 +216,7 @@ export class Simulation {
   requestPlacement(kind: EquipmentKind): boolean {
     if (
       !this.workshop.ready ||
-      this.resources < this.workshop.cost(kind) ||
+      this.coins < this.workshop.cost(kind) ||
       !this.availableSites(kind).length
     )
       return false;
@@ -212,7 +273,9 @@ export class Simulation {
     if (e.hp <= 0) {
       e.dead = 0.7;
       this.kills++;
-      this.resources += e.kind === "brute" ? 20 : 10;
+      const amount = e.kind === "brute" ? 20 : 10;
+      this.coins += amount;
+      effect(this, "coins", e, "#eac66f", 20, 1.25, { amount });
     }
   }
   damageDefender(d: Defender, n: number) {
@@ -244,6 +307,10 @@ export class Simulation {
       );
   }
   release(d: Defender) {
+    if (d.dead > 0) {
+      d.shot = null;
+      d.releaseFlash = 0;
+    }
     if (d.mounted !== null) {
       this.ballistas[d.mounted].user = null;
       d.mounted = null;
@@ -254,7 +321,7 @@ export class Simulation {
     }
   }
   shoot(d: Defender, target: Vec) {
-    if (d.dead || d.cooldown > 0) return;
+    if (d.dead || d.cooldown > 0 || d.shot || d.carried !== null) return;
     if (d.mounted !== null) {
       const b = this.ballistas[d.mounted];
       if (!b.loaded || b.reload > 0 || b.hp <= 0) return;
@@ -272,18 +339,109 @@ export class Simulation {
       this.shake = 2;
       return;
     }
-    d.facing = Math.atan2(target.y - d.y, target.x - d.x);
-    d.attacking = 0.25;
     if (d.ammo <= 0) {
       if (d.id === 0)
         this.notice(
-          "Carquois vide : E près de la réserve centrale pour reprendre 24 flèches.",
+          "Carquois vide : E près d’une réserve pour reprendre 24 flèches.",
         );
       return;
     }
-    d.ammo--;
+    this.drawBow(d, target, null, 1);
+  }
+  drawBow(d: Defender, target: Vec, power: PowerId | null, cost: number) {
+    d.ammo -= cost;
     d.cooldown = 0.62;
-    this.projectile(d, target, 28 + 10 * this.level("arrows"), "ally", "arrow");
+    d.attacking = 0.45;
+    d.releaseFlash = 0;
+    d.facing = Math.atan2(target.y - d.y, target.x - d.x);
+    const lock = this.enemies.find((e) => e.hp > 0 && distance(e, target) < 24);
+    d.shot = {
+      target: { ...target },
+      lockId: lock?.id ?? null,
+      power,
+      remaining: 0.24,
+      duration: 0.24,
+      ammoCost: cost,
+    };
+  }
+  useAbility(d: Defender, target: Vec): boolean {
+    if (!this.started || this.phase === "defeat") return false;
+    const h = hero(d.hero);
+    if (
+      d.dead > 0 ||
+      d.mounted !== null ||
+      d.carried !== null ||
+      this.placement ||
+      d.abilityCooldown > 0
+    )
+      return false;
+    const available = d.ammo + (d.shot && !d.shot.power ? d.shot.ammoCost : 0);
+    if (available < h.ammoCost) {
+      if (d.id === 0)
+        this.notice(
+          `Il faut ${h.ammoCost} flèche(s) pour ${h.powerName.toLowerCase()}.`,
+        );
+      return false;
+    }
+    if (d.shot) {
+      if (d.shot.power) return false;
+      d.ammo = Math.min(24, d.ammo + d.shot.ammoCost);
+      d.shot = null;
+    }
+    this.drawBow(d, target, h.power, h.ammoCost);
+    d.abilityCooldown = h.cooldown;
+    return true;
+  }
+  releaseArrow(d: Defender, shot: BowShot) {
+    let target = shot.target;
+    const lock = this.enemies.find((e) => e.id === shot.lockId && e.hp > 0);
+    if (lock) target = { x: lock.x, y: lock.y };
+    d.facing = Math.atan2(target.y - d.y, target.x - d.x);
+    d.releaseFlash = 0.16;
+    d.attacking = 0.16;
+    const bonus = 10 * this.level("arrows"),
+      power = shot.power;
+    if (power === "multishot") {
+      const a = d.facing,
+        dist = Math.max(400, distance(d, target));
+      for (const angle of [-0.22, -0.11, 0, 0.11, 0.22])
+        this.projectile(
+          d,
+          {
+            x: d.x + Math.cos(a + angle) * dist,
+            y: d.y + Math.sin(a + angle) * dist,
+          },
+          24 + bonus,
+          "ally",
+          "arrow",
+          null,
+          power,
+          d.id,
+        );
+    } else {
+      const damage =
+        power === "piercing"
+          ? 95
+          : power === "moon"
+            ? 60
+            : power === "lightning"
+              ? 45
+              : power === "explosive"
+                ? 23
+                : power
+                  ? 35
+                  : 28;
+      this.projectile(
+        d,
+        target,
+        damage + bonus,
+        "ally",
+        "arrow",
+        null,
+        power,
+        d.id,
+      );
+    }
   }
 
   projectile(
@@ -293,6 +451,8 @@ export class Simulation {
     team: "ally" | "enemy",
     kind: "arrow" | "bolt" | "fire",
     wallId: number | null = null,
+    power: PowerId | null = null,
+    ownerId = -1,
   ) {
     const dir = toward(from, to),
       speed =
@@ -303,9 +463,17 @@ export class Simulation {
             : team === "enemy"
               ? 310
               : 630;
-    const life = team === "enemy" ? distance(from, to) / speed : 2.6;
+    const life =
+      team === "enemy"
+        ? distance(from, to) / speed
+        : power === "explosive" || power === "frost"
+          ? Math.max(0.08, (distance(from, to) - 25) / speed)
+          : 2.6;
     this.projectiles.push({
       id: this.nextId++,
+      power,
+      ownerId,
+      effectDone: false,
       x: from.x + dir.x * 25,
       y: from.y + dir.y * 25,
       px: from.x,
@@ -320,13 +488,17 @@ export class Simulation {
       startZ: elevation(from) + 25,
       endZ: team === "enemy" && wallId !== null ? 32 : elevation(to) + 18,
       wallId,
-      pierce: kind === "bolt" ? 3 : 1,
+      pierce: power === "piercing" ? 6 : kind === "bolt" ? 3 : 1,
       hit: new Set(),
     });
   }
   interact() {
     const p = this.player;
     if (p.dead) return;
+    if (p.shot) {
+      this.notice("Terminez votre tir avant d’interagir.");
+      return;
+    }
     if (p.carried !== null) {
       this.release(p);
       this.notice("Baliste déposée. E pour la servir.");
@@ -343,7 +515,7 @@ export class Simulation {
     }
     const stock = this.stocks.find((s) => distance(s, p) < 90);
     if (stock) {
-      p.ammo = 24;
+      this.refill(p, stock);
       this.notice("Carquois rempli : 24 flèches.");
       return;
     }
@@ -366,7 +538,7 @@ export class Simulation {
     }
     const drop = this.pickups.find((q) => distance(q, p) < 85);
     if (drop) {
-      this.resources += drop.amount;
+      this.coins += drop.amount;
       this.pickups = this.pickups.filter((q) => q !== drop);
       return;
     }
@@ -377,8 +549,8 @@ export class Simulation {
   reload(d: Defender) {
     if (d.mounted === null) return;
     const b = this.ballistas[d.mounted];
-    if (!b.loaded && b.reload <= 0 && this.resources >= 2) {
-      this.resources -= 2;
+    if (!b.loaded && b.reload <= 0 && this.coins >= 2) {
+      this.coins -= 2;
       b.reload = 3.2 * Math.pow(0.82, this.level("reload"));
     }
   }
@@ -397,16 +569,23 @@ export class Simulation {
     );
   }
   repair(d: Defender, dt: number) {
-    if (this.resources <= 0) return false;
+    if (this.coins < 1 && d.repairCredit <= 0) return false;
     const targets = [...this.walls, ...this.ballistas]
       .filter((w) => w.hp < w.maxHp && distance(w, d) < 105)
       .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
     const w = targets[0];
     if (!w) return false;
     const rate = 28 * (1 + 0.4 * this.level("repair"));
-    const amount = Math.min(w.maxHp - w.hp, rate * dt, this.resources * 8);
+    const needed = Math.min(w.maxHp - w.hp, rate * dt);
+    const spend = Math.min(
+      this.coins,
+      Math.max(0, Math.ceil((needed - d.repairCredit) / 8)),
+    );
+    this.coins -= spend;
+    d.repairCredit += spend * 8;
+    const amount = Math.min(needed, d.repairCredit);
+    d.repairCredit -= amount;
     w.hp += amount;
-    this.resources -= amount / 8;
     d.attacking = 0.15;
     if (Math.random() < dt * 15) this.particlesAt(d, "#f3c875", 2);
     return true;
@@ -441,10 +620,15 @@ export class Simulation {
           : this.wave % 2
             ? [0, 2]
             : [0, 1, 2, 3];
-    this.notice(
-      `Vague ${this.wave} — attaque : ${this.fronts.map((s) => SIDES[s]).join(" · ")}`,
-    );
+    const labels = ["du nord", "de l’est", "du sud", "de l’ouest"];
+    const text =
+      this.fronts.length === 4
+        ? "Des monstres arrivent de tous les côtés !"
+        : `Des monstres arrivent ${this.fronts.map((s) => labels[s]).join(" et ")} !`;
+    this.waveAlert = { text, fronts: [...this.fronts], life: 4.5, total: 4.5 };
+    this.messageTime = 0;
   }
+
   spawn(kind?: EnemyKind, side?: Side) {
     const s =
       side ?? this.fronts[Math.floor(Math.random() * this.fronts.length)];
@@ -473,6 +657,11 @@ export class Simulation {
       ...pos,
       id: this.nextId++,
       kind: k,
+      burn: 0,
+      poison: 0,
+      slow: 0,
+      stun: 0,
+      dotTick: 0,
       side: s,
       hp,
       maxHp: hp,
@@ -519,11 +708,29 @@ export class Simulation {
     this.time += dt;
     this.tick++;
     this.messageTime -= dt;
+    if (this.waveAlert) {
+      this.waveAlert.life -= dt;
+      if (this.waveAlert.life <= 0) this.waveAlert = null;
+    }
+    for (const stock of this.stocks)
+      stock.pulse = Math.max(0, stock.pulse - dt * 2);
+    for (const e of this.effects) e.life -= dt;
+    this.effects = this.effects.filter((e) => e.life > 0);
     this.shake = Math.max(0, this.shake - dt * 20);
     const p = this.player;
     for (const d of this.defenders) {
       d.moving = false;
       d.cooldown = Math.max(0, d.cooldown - dt);
+      d.abilityCooldown = Math.max(0, d.abilityCooldown - dt);
+      d.releaseFlash = Math.max(0, d.releaseFlash - dt);
+      if (d.shot && d.dead <= 0) {
+        d.shot.remaining -= dt;
+        if (d.shot.remaining <= 0) {
+          const shot = d.shot;
+          d.shot = null;
+          this.releaseArrow(d, shot);
+        }
+      }
       d.hurt = Math.max(0, d.hurt - dt);
       d.attacking = Math.max(0, d.attacking - dt);
       d.dodge = Math.max(0, d.dodge - dt);
@@ -601,6 +808,7 @@ export class Simulation {
       if (p.mounted !== null) this.ballistas[p.mounted].angle = p.facing;
       const placing = this.placement !== null;
       if (placing && input.clicked) this.placeOrder(aim);
+      if (!placing && input.abilityPressed) this.useAbility(p, aim);
       if (!placing && (input.down || input.clicked)) this.shoot(p, aim);
       if (input.keys.has("r") || input.pressed.has("r")) {
         if (p.mounted !== null) this.reload(p);
@@ -618,6 +826,19 @@ export class Simulation {
       }
       if (b.hp <= 0 && b.user !== null) this.release(this.defenders[b.user]);
     }
+    for (const e of this.enemies)
+      if (e.hp > 0) {
+        e.dotTick += dt;
+        if (e.dotTick >= 0.5) {
+          e.dotTick -= 0.5;
+          const damage = (e.burn > 0 ? 8 : 0) + (e.poison > 0 ? 6 : 0);
+          if (damage) this.damageEnemy(e, damage);
+        }
+        e.burn = Math.max(0, e.burn - dt);
+        e.poison = Math.max(0, e.poison - dt);
+        e.slow = Math.max(0, e.slow - dt);
+        e.stun = Math.max(0, e.stun - dt);
+      }
     this.workshop.update(dt);
     updateAllies(this, dt);
     updateEnemies(this, dt);
@@ -656,6 +877,7 @@ export class Simulation {
           ) {
             this.damageEnemy(e, q.damage);
             q.hit.add(e.id);
+            powerImpact(this, q, e);
             q.pierce--;
             if (q.pierce <= 0) {
               q.life = -1;
@@ -685,6 +907,12 @@ export class Simulation {
           q.hit.add(-1);
         }
       }
+      if (
+        q.life <= 0 &&
+        q.team === "ally" &&
+        (q.power === "explosive" || q.power === "frost")
+      )
+        powerImpact(this, q, null);
       if (q.life <= 0)
         this.particlesAt(q, q.kind === "fire" ? "#ff9b4a" : "#d1bd81", 5);
     }
@@ -701,7 +929,7 @@ export class Simulation {
       q.life -= dt;
       for (const d of this.defenders)
         if (d.dead <= 0 && distance(q, d) < 54) {
-          this.resources += q.amount;
+          this.coins += q.amount;
           q.life = 0;
           break;
         }
@@ -722,12 +950,12 @@ export class Simulation {
         this.phase = "preparation";
         this.remaining = 60;
         this.workshop.arrive();
-        this.resources += 45;
+        this.coins += 45;
         for (const d of this.defenders) {
           d.hp = Math.min(d.maxHp, d.hp + 40);
         }
         this.notice(
-          `Manche ${this.wave} repoussée ! +45 points · Retrouvez l’ouvrier au centre.`,
+          `Manche ${this.wave} repoussée ! +45 pièces d’or · Retrouvez l’ouvrier au centre.`,
         );
       }
     }

@@ -1,96 +1,113 @@
 # Le Château du Renard — La dernière veille
 
-Jeu de défense de château sur navigateur de bureau, en TypeScript / Canvas 2D avec Vite. Version 0.2 : trois archers, une plateforme entièrement au niveau des remparts, et un ouvrier qui livre les équipements achetés entre les manches.
+Prototype jouable de défense de château, TypeScript / Canvas 2D / Vite.
 
 **Jouer : https://dougdouggy.github.io/LeChateauDuRenard/**
 
-## Hébergement et gratuité
+## Version 0.3 — huit capuches, huit pouvoirs
 
-Cette configuration utilise GitHub Pages sur un dépôt public et des exécuteurs GitHub Actions standards. Ces services sont gratuits dans cette configuration, sans essai de 30 jours ni abonnement à activer. Le site reste accessible entre les déploiements : aucun workflow ne tourne en continu pour permettre de jouer. Un workflow ne démarre que lors d’un push sur `main` ou d’un lancement manuel.
+Avant chaque partie, choisir le personnage J1 puis les deux compagnons IA parmi **huit archers à capuche**. Cliquer sur le membre de la garde à personnaliser, puis sur son archer. Les trois membres sont distincts : sélectionner un archer déjà attribué échange les deux places. Tous sont disponibles sans achat.
 
-L’encart d’essai de 30 jours proposé par GitHub concerne des offres payantes telles qu’Enterprise/Copilot, qui ne sont pas requises ici. Cette affirmation concerne les offres actuelles, dans les limites d’usage du service ; elle n’est pas une promesse que GitHub ne changera jamais ses conditions. Voir [les offres GitHub](https://github.com/pricing).
+| Archer | Capuche   | Pouvoir au clic droit                                            | Recharge | Coût      |
+| ------ | --------- | ---------------------------------------------------------------- | -------- | --------- |
+| Aëlan  | Ambre     | Flèche explosive : explosion de zone à l’impact                  | 10 s     | 1 flèche  |
+| Brune  | Verte     | Tir multiple : cinq flèches en éventail                          | 8 s      | 3 flèches |
+| Nivéa  | Bleue     | Givre : ralentissement de zone pendant 4 s                       | 9 s      | 1 flèche  |
+| Kaël   | Rouge     | Feu : brûlure pendant 5 s                                        | 9 s      | 1 flèche  |
+| Osric  | Violette  | Trait perforant traversant jusqu’à six ennemis                   | 8 s      | 1 flèche  |
+| Sélène | Ivoire    | Flèche lunaire : soigne le tireur et les alliés proches de 18 PV | 10 s     | 1 flèche  |
+| Ronce  | Noire     | Poison : dégâts persistants pendant 6 s                          | 9 s      | 1 flèche  |
+| Ilyas  | Turquoise | Foudre : jusqu’à quatre ennemis touchés et brièvement étourdis   | 11 s     | 1 flèche  |
 
-Le premier déploiement public de la version 0.1 a été vérifié : HTTPS 200 et fichiers identiques au bundle testé. Le workflow dans `.github/workflows/deploy.yml` teste et publie les versions suivantes automatiquement. Dans **Settings → Pages → Source**, conserver **GitHub Actions**.
+Les compagnons utilisent leur propre pouvoir pendant les assauts. Le HUD affiche le nom, le coût en flèches, la disponibilité et le délai restant. Les pouvoirs ne fonctionnent pas en servant ou en transportant une baliste. Un clic droit pendant le choix d’un emplacement annule ce choix sans déclencher le pouvoir.
 
-## Démarrer en local
+Les projectiles et leurs effets sont réels : dégâts de zone, perforation, ralentissement, brûlure, poison, soin et rebonds de foudre sont exécutés par la simulation. Les brûlures et poisons expirent, et une élimination ne paie qu’une fois, même en cas d’effets cumulés.
 
-Node.js 22.12+ et npm ; validation avec Node 24. Aucun compte, clé d’API, base de données ou serveur de jeu distant n’est nécessaire. Les images et les polices sont locales.
+## Pièces d’or et équipement
+
+La garde gagne des **pièces d’or**, pas un score : 10 par ennemi vaincu, 20 pour une brute, puis 45 pour une manche terminée. Un gain apparaît près de l’ennemi et rejoint immédiatement la bourse commune. Le solde reste entier, y compris lors des réparations progressives. Les dépenses et récompenses sont limitées à la partie en cours ; aucun achat en argent réel.
+
+Départ : **trois archers avec chacun 24 flèches, une réserve centrale, zéro baliste et zéro pièce**. La plateforme est entièrement au niveau des remparts, sans bâtiments ni obstacles intérieurs ; les tirs peuvent franchir les parapets depuis tout l’intérieur. Huit emplacements sont disponibles pour les futures balistes.
+
+Après chaque manche, **Gaspard** monte par l’accès central pendant la pause de 60 secondes et propose ses services. E près de lui, ou B, ouvre son catalogue.
+
+- **Baliste mobile : 90 pièces**. Choisir un emplacement marqué ; Gaspard rapporte la caisse, installe l’arme et revient.
+- **Réserve de flèches : 40 pièces**. Choisir un emplacement de ravitaillement ; le nouvel accès aux flèches est utilisable après livraison.
+- **Améliorations** : flèches, murs, réparations, puissance et rechargement des balistes. L’effet est appliqué à la livraison.
+
+Une seule commande à la fois, paiement une seule fois à la confirmation ; annuler un placement ne coûte rien. Une livraison en cours et le retour de l’ouvrier se terminent avant le prochain assaut. Les réserves remplissent gratuitement les carquois à 24 flèches ; les IA vont se ravitailler seules. Le ravitaillement fait briller la réserve et anime des flèches vers le personnage.
+
+## Alertes et présentation
+
+Une annonce au **centre de l’écran** signale les fronts de chaque manche : « Des monstres arrivent du nord ! », « … de l’est et de l’ouest ! », ou « … de tous les côtés ! ». Elle est temporaire, non bloquante et suspendue pendant la pause. La mini-carte suit les ennemis, les défenseurs et les brèches.
+
+Les huit archers disposent chacun de quatre poses de marche et de quatre poses de tir : repos, début de tension, pleine tension, lâcher. Un tir normal encoche et tend réellement l’arc pendant 0,24 s avant l’apparition de sa flèche. Les huit projectiles illustrés ont été régénérés, avec traînées et effets distincts.
+
+La réserve est un coffre illustré à carquois sur un socle de pierre. L’accès central possède un encadrement en pierre, un volet animé, une lumière chaude sous les marches et une apparition/disparition de Gaspard découpée au niveau du sol. Ombres et pavage relient ces éléments au décor.
+
+## Commandes
+
+| Action                             | Commande                                       |
+| ---------------------------------- | ---------------------------------------------- |
+| Se déplacer                        | ZQSD, WASD ou flèches                          |
+| Viser / tir normal                 | Souris / clic gauche, maintenir pour enchaîner |
+| Pouvoir de l’archer                | Clic droit                                     |
+| Esquiver                           | Espace                                         |
+| Reprendre 24 flèches               | E près d’une réserve                           |
+| Parler à Gaspard                   | E près de lui entre les manches                |
+| Catalogue                          | B                                              |
+| Confirmer l’emplacement d’un achat | Clic gauche sur une marque éclairée            |
+| Annuler un placement sans payer    | Échap ou clic droit                            |
+| Prendre / quitter une baliste      | E                                              |
+| Recharger une baliste              | R ; 2 pièces                                   |
+| Transporter / déposer une baliste  | F quand on la sert / E                         |
+| Réparer                            | Maintenir R à pied ; consomme de l’or          |
+| Ordres individuels aux compagnons  | Tab                                            |
+| Aide / pause                       | H / Échap                                      |
+| Zoom                               | Molette                                        |
+
+Les défenseurs à terre reviennent après 12 s. Défaite s’ils sont tous simultanément à terre ou si l’intégrité tombe sous 12 %. Vagues infinies, aucun boss. Gobelins et squelettes archers, incendiaires, diablotins rapides et brutes attaquent progressivement différents fronts. Les tireurs s’arrêtent pour lancer des projectiles esquivables ; les unités de mêlée peuvent entrer après une brèche.
+
+## Développement et validation
+
+Node.js 22.12+ et npm ; validation avec Node 24. Aucune clé, base de données ou API distante n’est nécessaire au jeu. Les images et les polices sont locales.
 
 ```sh
 npm ci
 npm run dev -- --port 5173
+npm test                 # 32 tests de simulation, dont les huit pouvoirs
+npm run build            # TypeScript et bundle de production
+npm run test:browser     # Sélection, contrôles, pouvoir, alertes, une manche réelle et livraisons
+npm run test:production  # Bundle servi sous /LeChateauDuRenard/
+npm run preview
 ```
 
-Puis choisir **Prendre la garde** dans le jeu.
+Les tests navigateur utilisent `/usr/bin/chromium` ou `CHROMIUM_PATH`. Le parcours principal démarre son propre serveur sur 5174 et l’arrête après les tests. Captures réelles et résultats dans `artifacts/`, ignoré par Git. Le paramètre `?test` expose l’état de diagnostic ; le mode normal ne l’expose pas.
 
-```sh
-npm test                 # Tests de simulation : gameplay, marche, commandes et livraisons
-npm run build            # Vérification TypeScript et bundle de production
-npm run test:browser     # Parcours fonctionnel complet dans Chromium
-npm run test:production  # Bundle réel testé sous /LeChateauDuRenard/
-npm run preview          # Servir le bundle de production
-```
+| Module              | Rôle                                                                |
+| ------------------- | ------------------------------------------------------------------- |
+| `src/heroes.ts`     | Huit profils, palettes, pouvoirs, coûts et délais                   |
+| `src/powers.ts`     | Impacts, zones, soins, foudre et effets visuels de simulation       |
+| `src/simulation.ts` | État, encoche/lâcher, projectiles, or, dégâts, manches et placement |
+| `src/workshop.ts`   | Arrivée de Gaspard, commandes, livraison et installation            |
+| `src/map.ts`        | Plateforme, remparts, emplacements, collisions et navigation A*     |
+| `src/strategy.ts`   | Compagnons et ennemis, pouvoirs IA et statuts de contrôle           |
+| `src/animation.ts`  | Poses de marche/tir et cadrage des atlas                            |
+| `src/combat.ts`     | Hauteur des projectiles partagée entre rendu et collisions          |
+| `src/renderer.ts`   | Sprites, terrain, lumière, effets, portraits et mini-carte          |
+| `src/ui.ts`         | Sélection de la garde, HUD, annonce centrale, catalogue et ordres   |
+| `src/main.ts`       | Entrées, boucle fixe à 60 Hz et sons                                |
 
-Les tests navigateur utilisent Chromium à `/usr/bin/chromium` (ou `CHROMIUM_PATH`). Le parcours fonctionnel démarre son propre serveur sur le port 5174 et l’arrête ensuite. Les captures réelles et les résultats sont dans `artifacts/`, ignoré par Git. Le paramètre `?test` expose l’état de diagnostic destiné aux tests ; il est absent du mode de jeu normal.
+## Hébergement gratuit
 
-## Commencer simplement, s’équiper ensuite
+GitHub Pages sur ce dépôt **public**, avec les exécuteurs GitHub Actions standards, est gratuit dans la configuration actuelle, sans essai de 30 jours ni abonnement Enterprise/Copilot à activer. Aucun achat payant n’a été ajouté pour les archers ou leurs pouvoirs. Les conditions futures du fournisseur ne peuvent pas être garanties ; voir [les offres actuelles](https://github.com/pricing).
 
-Au départ : **trois archers avec chacun 24 flèches, une seule réserve centrale, zéro baliste et zéro point**. Huit marques de placement indiquent les futurs emplacements de balistes. Il n’y a ni bâtiment, ni jardin, ni séparation de niveau dans l’espace de combat. La plateforme entière est à la hauteur des remparts : les flèches peuvent franchir les parapets depuis tout l’intérieur.
+Le jeu reste accessible quand le chat ou l’environnement cloud est fermé. Actions ne tourne pas en permanence : `.github/workflows/deploy.yml` construit, teste et publie uniquement lors d’un push sur `main` ou d’un lancement manuel. Dans **Settings → Pages → Source**, conserver **GitHub Actions**. Les chemins relatifs de Vite permettent le sous-répertoire du site.
 
-Les archers défendent contre les gobelins et squelettes tireurs, les lanceurs incendiaires, les diablotins rapides et les brutes. Les tireurs approchent puis s’arrêtent pour attaquer à distance. Les unités de mêlée attaquent les portes et entrent après une brèche. Les impacts, collisions, dégâts et morts sont réels.
+## Assets et limites
 
-Chaque élimination rapporte immédiatement **10 points**, ou **20 pour une brute**. Finir une manche ajoute **45 points**. Les points sont partagés par la garde ; les réparations et rechargements des balistes achetées peuvent également en consommer.
+Les atlas sont produits pour ce prototype par génération d’images, dans la direction artistique de la référence fournie, et intégrés à la scène réellement jouable. Ils ne remplacent pas le jeu par une image conceptuelle. Les polices Cinzel et DM Sans sont servies via Fontsource avec leurs licences.
 
-Après chaque manche, une pause de **60 secondes** permet de s’équiper. **Gaspard, l’ouvrier**, monte par l’escalier central et dit : « Dites-moi de quoi vous avez besoin, je vous prépare ça rapidement ! » Approcher et appuyer sur **E**, ou ouvrir son catalogue avec **B**.
+Les cycles ont quatre poses et une vue trois-quarts commune, avec symétrie horizontale ; pas encore huit animations directionnelles complètes. Les attaques possèdent désormais leurs poses illustrées d’arc, tandis que l’esquive, les dégâts, les morts et les effets de pouvoir restent partiellement procéduraux. La simulation commande les dégâts et le moment réel du lâcher. La fidélité exacte à la référence, le son final, les commandes tactiles et l’équilibrage de longues parties restent à améliorer.
 
-- **Baliste mobile — 90 points** : choisir un emplacement marqué ; Gaspard revient à l’escalier, apporte la caisse, installe l’arme puis retourne au comptoir. Elle apparaît seulement après livraison.
-- **Réserve de flèches — 40 points** : choisir l’un des quatre points de ravitaillement supplémentaires ; elle devient utilisable après la même livraison.
-- **Améliorations** : puissance et recharge des balistes, flèches, murs et réparations. Leur effet est appliqué à la livraison, pas au clic d’achat.
-
-Une seule commande est traitée à la fois. Les points sont débités une seule fois, à la validation d’un emplacement valable ou d’une amélioration. Annuler le choix d’un emplacement ne coûte rien. Une livraison active et le retour de l’ouvrier se terminent avant le prochain assaut, même si le compte à rebours expire. Gaspard repart par l’escalier au début de la manche suivante.
-
-Les réserves remplissent gratuitement le carquois à 24 flèches. Les alliés vont se réapprovisionner seuls lorsqu’ils sont à sec. En début de partie, ils combattent à l’arc ; ils peuvent servir les balistes une fois achetées. Les fronts, les armes et les commandes sont réservés pour éviter que les deux compagnons se disputent le même poste.
-
-## Commandes
-
-| Action                                | Commande                                                      |
-| ------------------------------------- | ------------------------------------------------------------- |
-| Déplacement                           | ZQSD, WASD ou flèches                                         |
-| Viser / tirer à l’arc                 | Souris / clic gauche, maintenir pour enchaîner                |
-| Esquive                               | Espace                                                        |
-| Reprendre 24 flèches                  | E près d’une réserve                                          |
-| Parler à Gaspard                      | E près de lui entre les manches                               |
-| Catalogue de l’ouvrier                | B                                                             |
-| Choisir l’emplacement d’un achat      | Clic sur une marque éclairée                                  |
-| Annuler le choix sans payer           | Échap ou clic droit                                           |
-| Prendre / quitter une baliste achetée | E                                                             |
-| Recharger une baliste                 | R ; 2 points                                                  |
-| Transporter / déposer une baliste     | F quand on la sert / E                                        |
-| Réparer                               | Maintenir R à pied près d’une structure ; consomme des points |
-| Ordres individuels aux compagnons     | Tab                                                           |
-| Aide / pause                          | H / Échap                                                     |
-| Zoom                                  | Molette                                                       |
-
-Les personnages à terre reviennent après 12 secondes. La partie est perdue si tous les défenseurs sont simultanément à terre ou si l’intégrité passe sous 12 %. Vagues infinies, aucun boss. La première manche attaque au nord, la deuxième à l’est et à l’ouest, puis les fronts se combinent.
-
-## Architecture et assets
-
-| Module              | Rôle                                                                         |
-| ------------------- | ---------------------------------------------------------------------------- |
-| `src/simulation.ts` | État de partie, arcs, munitions, dégâts, points, vagues et placement         |
-| `src/workshop.ts`   | Arrivée de l’ouvrier, commandes, trajet de livraison, installation et départ |
-| `src/map.ts`        | Plateau surélevé continu, remparts, emplacements, collisions et A*           |
-| `src/strategy.ts`   | Compagnons archers et comportements des ennemis                              |
-| `src/combat.ts`     | Hauteur de projectile commune au rendu et aux collisions                     |
-| `src/animation.ts`  | Cycle de marche commandé par la distance réellement parcourue                |
-| `src/renderer.ts`   | Projection trois-quarts, sprites, terrain, torches, effets et mini-carte     |
-| `src/ui.ts`         | HUD, catalogue de Gaspard, ordres, aide et écrans                            |
-| `src/main.ts`       | Entrées, boucle fixe 60 Hz et sons synthétiques                              |
-
-Les trois défenseurs possèdent de nouveaux sprites d’archers sans épée ni bouclier. Chaque archer dispose de **quatre poses de marche réellement distinctes** dans `public/assets/archers-walk.png`. Le cycle avance avec le déplacement réel et s’arrête lorsqu’on lâche les touches, rencontre un mur, sert une baliste ou tombe à terre. Gaspard dispose également de quatre images de marche avec sa caisse.
-
-Les images ont été produites pour ce prototype avec l’outil de génération d’images, dans la direction de la référence fournie, et sont utilisées dans le jeu. Elles ne sont pas présentées comme une capture conceptuelle remplaçant un jeu jouable. Cinzel et DM Sans sont servies localement via Fontsource, avec leurs licences incluses.
-
-Limites artistiques : les cycles illustrés montrent une vue trois-quarts commune, avec symétrie horizontale ; ce ne sont pas huit animations directionnelles complètes. Attaques, esquives, dégâts et morts gardent des effets procéduraux. Les balistes ont huit orientations, mais pas encore un atlas séparé pour chaque état de charge. Le terrain, les murs et les réserves combinent textures et dessin Canvas. La fidélité exacte à la référence, le son final et l’équilibrage de longues parties restent à améliorer.
-
-Le multijoueur n’est pas implémenté. Les modules de simulation indépendants du DOM permettent son évolution, mais protocole réseau, serveur autoritaire, reconnexion et synchronisation restent à construire.
+Le multijoueur n’est pas implémenté. Les modules de simulation sont indépendants du rendu, mais un serveur autoritaire, le protocole, la synchronisation et la reconnexion restent à construire.

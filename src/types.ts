@@ -15,7 +15,29 @@ export interface Actor extends Vec {
   facing: number;
   dead: number;
 }
+export type PowerId =
+  | "explosive"
+  | "multishot"
+  | "frost"
+  | "fire"
+  | "piercing"
+  | "moon"
+  | "poison"
+  | "lightning";
+export interface BowShot {
+  target: Vec;
+  lockId: number | null;
+  power: PowerId | null;
+  remaining: number;
+  duration: number;
+  ammoCost: number;
+}
 export interface Defender extends Actor {
+  hero: number;
+  abilityCooldown: number;
+  shot: BowShot | null;
+  releaseFlash: number;
+  repairCredit: number;
   name: string;
   color: string;
   weapon: 2;
@@ -33,6 +55,11 @@ export interface Defender extends Actor {
   attacking: number;
 }
 export interface Enemy extends Actor {
+  burn: number;
+  poison: number;
+  slow: number;
+  stun: number;
+  dotTick: number;
   kind: EnemyKind;
   side: Side;
   think: number;
@@ -60,6 +87,9 @@ export interface Ballista extends Vec {
   recoil: number;
 }
 export interface Projectile extends Vec {
+  power: PowerId | null;
+  ownerId: number;
+  effectDone: boolean;
   id: number;
   px: number;
   py: number;
@@ -95,6 +125,7 @@ export interface Input {
   mouse: Vec;
   down: boolean;
   clicked: boolean;
+  abilityPressed?: boolean;
 }
 export interface Upgrade {
   id: string;
@@ -113,6 +144,7 @@ export const toward = (a: Vec, b: Vec) => {
 };
 
 export interface Stock extends Vec {
+  pulse: number;
   id: number;
 }
 export type EquipmentKind = "ballista" | "stock";
@@ -123,4 +155,22 @@ export interface Delivery {
   target: Vec;
   cost: number;
   build: number;
+}
+
+export interface CombatEffect extends Vec {
+  id: number;
+  kind: "explosion" | "frost" | "lightning" | "heal" | "coins" | "ammo";
+  life: number;
+  total: number;
+  color: string;
+  radius: number;
+  amount?: number;
+  points?: Vec[];
+  target?: Vec;
+}
+export interface WaveAlert {
+  text: string;
+  fronts: Side[];
+  life: number;
+  total: number;
 }
