@@ -1,0 +1,1374 @@
+:root {
+  font-family: "DM Sans", sans-serif;
+  color: #e3e5dd;
+  background: #101f29;
+  font-synthesis: none;
+  --gold: #d9b67b;
+  --muted: #85999b;
+  --border: #a6b2a226;
+  --panel: #101e27ed;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  overflow: hidden;
+}
+button,
+select {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+  color: inherit;
+}
+button:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 4px;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+canvas#game {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+#hud button,
+#hud select,
+#hud .drawer,
+#hud .orders {
+  pointer-events: auto;
+}
+button {
+  border: 0;
+}
+kbd {
+  font:
+    10px "DM Sans",
+    sans-serif;
+  border: 1px solid #9cafab35;
+  border-radius: 3px;
+  color: #c5cebf;
+  padding: 3px 5px;
+  background: #93a6a30a;
+  white-space: nowrap;
+}
+.hidden {
+  display: none !important;
+}
+.eyebrow {
+  font-size: 9px;
+  letter-spacing: 1.9px;
+  font-weight: 700;
+  color: #aebcb4;
+}
+.topbar {
+  height: 100px;
+  padding: 23px 32px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  background: linear-gradient(#0c1923ee, #0c192380, transparent);
+  gap: 25px;
+}
+.brand {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: #e9e5d5;
+  font:
+    500 15px "Cinzel",
+    Georgia,
+    serif;
+  letter-spacing: 1.7px;
+  line-height: 1.1;
+}
+.brand-fox {
+  color: var(--gold);
+  width: 43px;
+  height: 48px;
+  border-right: 1px solid var(--border);
+  padding-right: 10px;
+}
+.brand svg {
+  width: 34px;
+  height: 40px;
+}
+.brand > div > span {
+  display: block;
+  font-size: 20px;
+  margin-top: 3px;
+}
+.brand small {
+  display: block;
+  font:
+    8px "DM Sans",
+    sans-serif;
+  letter-spacing: 2.7px;
+  margin-top: 8px;
+  color: #8faaa8;
+}
+.wave-panel {
+  width: 310px;
+  padding-top: 2px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.wave-top,
+.wave-bottom {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+}
+.wave-top > span:nth-child(2) {
+  color: var(--gold);
+  font-weight: 700;
+}
+.wave-top > span:last-child {
+  margin-left: auto;
+  color: #b8c6c2;
+}
+.live-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 8px #d9b67b99;
+}
+.wave-track {
+  height: 4px;
+  margin: 12px 0 8px;
+  background: #7f97942e;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.wave-track i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #716447, #e2bf7b);
+  transition: width 0.3s;
+}
+.wave-bottom {
+  justify-content: space-between;
+  color: #8da2a3;
+  font-size: 10px;
+  letter-spacing: 0.2px;
+}
+.top-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.resource {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 15px;
+  margin-right: 5px;
+  border-right: 1px solid var(--border);
+  height: 32px;
+}
+.resource > span {
+  font-size: 29px;
+  color: var(--gold);
+  transform: rotate(-35deg);
+}
+.resource strong {
+  font-size: 18px;
+  font-weight: 500;
+  color: #edddbc;
+}
+.resource small {
+  color: #8c9e9e;
+  font-size: 8px;
+  letter-spacing: 1.5px;
+}
+.icon-btn {
+  height: 32px;
+  width: 32px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #172a3266;
+  color: #a8b9b7;
+  font-size: 17px;
+}
+.icon-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.squad-panel {
+  position: absolute;
+  top: 122px;
+  left: 30px;
+  width: 219px;
+}
+.squad-panel > .eyebrow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 8px;
+  padding: 0 0 14px;
+}
+.squad-panel > .eyebrow > span {
+  color: #79908e;
+}
+.defender {
+  background: linear-gradient(90deg, #101e28ed, #12242be0);
+  border: 1px solid #7b97951a;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  display: flex;
+  gap: 11px;
+  padding: 9px 10px;
+  align-items: center;
+  box-shadow: 0 6px 24px #04131920;
+}
+.defender.human {
+  border-color: #bf9d6155;
+}
+.portrait {
+  position: relative;
+  border-radius: 50%;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  background: #263c43;
+  border: 1px solid #d5b47c88;
+  overflow: visible;
+}
+.portrait img {
+  position: absolute;
+  width: 180px;
+  max-width: none;
+  clip-path: circle(20px at 21px 58px);
+  top: -38px;
+  left: 0;
+}
+.portrait-1 img {
+  left: -45px;
+  clip-path: circle(20px at 66px 58px);
+}
+.portrait-2 img {
+  left: -90px;
+  clip-path: circle(20px at 111px 58px);
+}
+.portrait-1 {
+  border-color: #7bb9a480;
+}
+.portrait-2 {
+  border-color: #a3a5d380;
+}
+.portrait > span {
+  position: absolute;
+  bottom: -4px;
+  left: -5px;
+  font-size: 8px;
+  font-weight: 700;
+  color: #13252c;
+  background: #d7b882;
+  border: 2px solid #14262e;
+  border-radius: 4px;
+  padding: 1px 3px;
+}
+.portrait-1 > span {
+  background: #88b5a3;
+}
+.portrait-2 > span {
+  background: #aaa9ce;
+}
+.defender-info {
+  flex: 1;
+  min-width: 0;
+}
+.defender-info > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+}
+.defender-info strong {
+  font-family: "Cinzel", Georgia, serif;
+  font-size: 12px;
+  font-weight: 500;
+}
+.defender-info > div > span {
+  font-size: 7px;
+  letter-spacing: 1px;
+  color: #8ca49e;
+}
+.health {
+  height: 3px;
+  width: 100%;
+  background: #030d1766;
+}
+.health i {
+  display: block;
+  height: 3px;
+  transition: width 0.3s;
+}
+.defender-info small {
+  font-size: 8px;
+  color: #8fa3a0;
+  display: block;
+  margin-top: 5px;
+}
+.fallen {
+  opacity: 0.5;
+}
+.text-btn {
+  background: transparent;
+  color: #aabbb4;
+  font-size: 10px;
+  padding: 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.text-btn kbd {
+  margin-left: auto;
+  font-size: 8px;
+}
+.text-btn > span {
+  color: var(--gold);
+  font-size: 16px;
+}
+.text-btn:hover {
+  color: var(--gold);
+}
+#orders-button {
+  width: 100%;
+}
+.orders {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  padding: 13px;
+  border-radius: 5px;
+  box-shadow: 0 10px 30px #0005;
+}
+.orders p {
+  font-size: 9px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0 0 13px;
+}
+.orders label {
+  display: grid;
+  grid-template-columns: 1fr 65px;
+  gap: 7px;
+  font-size: 10px;
+  color: var(--gold);
+  margin-top: 10px;
+}
+.orders label select:first-of-type {
+  grid-column: 1;
+}
+.orders select {
+  width: 100%;
+  background: #20353d;
+  color: #cfdbd0;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 5px;
+  font-size: 9px;
+}
+.map-panel {
+  position: absolute;
+  right: 30px;
+  top: 122px;
+  width: 218px;
+}
+.map-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 13px;
+}
+.map-title .eyebrow {
+  font-size: 8px;
+  letter-spacing: 1.7px;
+}
+.map-compass {
+  font-family: Georgia, serif;
+  font-size: 12px;
+  color: var(--gold);
+}
+.map-wrap {
+  position: relative;
+  border: 1px solid #a7b7a344;
+  padding: 5px;
+  background: #10242bd9;
+  box-shadow: 0 15px 30px #04141c55;
+}
+.map-wrap canvas {
+  display: block;
+  width: 100%;
+  height: 163px;
+  opacity: 0.9;
+}
+.map-corner {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-color: var(--gold);
+  border-style: solid;
+}
+.map-corner.tl {
+  top: -1px;
+  left: -1px;
+  border-width: 2px 0 0 2px;
+}
+.map-corner.br {
+  bottom: -1px;
+  right: -1px;
+  border-width: 0 2px 2px 0;
+}
+.fronts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding: 12px 0 10px;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+.fronts > span {
+  display: grid;
+  grid-template-columns: 8px 1fr;
+  font-size: 9px;
+  color: #8da6a3;
+  align-items: center;
+}
+.fronts i {
+  width: 4px;
+  height: 4px;
+  background: #638c7d;
+  border-radius: 50%;
+}
+.fronts b {
+  grid-column: 2;
+  font-weight: 400;
+  font-size: 8px;
+  margin-top: 3px;
+  color: #6e8988;
+}
+.fronts .attacked {
+  color: #f8b59c;
+}
+.fronts .attacked i {
+  background: #e5876e;
+  box-shadow: 0 0 8px #e5876e80;
+}
+.fronts .attacked b {
+  color: #e5a288;
+}
+.map-legend {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 10px;
+  font-size: 8px;
+  color: #91a6a1;
+}
+.map-legend span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+}
+.gold {
+  background: #e9c389;
+}
+.green {
+  background: #80b9a2;
+}
+.red {
+  background: #ee8f7b;
+}
+.fort-status {
+  position: absolute;
+  right: 30px;
+  top: 426px;
+  width: 218px;
+  background: #101f28d9;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 14px;
+}
+.fort-status .eyebrow {
+  font-size: 7px;
+  letter-spacing: 1px;
+  display: flex;
+  justify-content: space-between;
+}
+.fort-status strong {
+  color: var(--gold);
+  font-size: 10px;
+}
+.fort-track {
+  height: 4px;
+  background: #8caaa22e;
+  margin: 10px 0;
+}
+.fort-track i {
+  background: linear-gradient(90deg, #638d7a, #b6c6a2);
+  display: block;
+  height: 100%;
+  transition: width 0.3s;
+}
+.fort-status > div:last-child {
+  font-size: 9px;
+  color: #8fa5a1;
+}
+.objective {
+  position: absolute;
+  left: 32px;
+  bottom: 182px;
+  max-width: 235px;
+  padding-left: 17px;
+  border-left: 1px solid #d9b67b55;
+}
+.objective-mark {
+  position: absolute;
+  left: -5px;
+  top: -5px;
+  font-size: 10px;
+  color: var(--gold);
+  background: #122731;
+}
+.objective .eyebrow {
+  font-size: 8px;
+  color: var(--gold);
+}
+.objective strong {
+  display: block;
+  font:
+    500 15px "Cinzel",
+    Georgia,
+    serif;
+  margin-top: 9px;
+}
+.objective p {
+  font-size: 10px;
+  line-height: 1.7;
+  color: #91a5a2;
+  margin: 8px 0 0;
+}
+.notice {
+  position: absolute;
+  left: 50%;
+  top: 108px;
+  transform: translateX(-50%);
+  max-width: 560px;
+  min-width: 300px;
+  text-align: center;
+  padding: 13px 23px;
+  background: linear-gradient(
+    90deg,
+    #11252b00,
+    #10212cf5 15%,
+    #10212cf5 85%,
+    #11252b00
+  );
+  color: #e5cd9d;
+  font-size: 11px;
+  border-top: 1px solid #cfb17a35;
+  border-bottom: 1px solid #cfb17a35;
+  line-height: 1.5;
+}
+.context {
+  position: absolute;
+  bottom: 158px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0d1d27ec;
+  border: 1px solid #d9b67b44;
+  border-radius: 6px;
+  padding: 12px 18px;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #e1d4b7;
+  box-shadow: 0 4px 15px #0003;
+}
+.context kbd {
+  color: var(--gold);
+  margin: 0 5px;
+  font-size: 9px;
+}
+.context > span {
+  color: #6f8e8d;
+  padding: 0 8px;
+}
+.bottom-bar {
+  position: absolute;
+  bottom: 39px;
+  left: 30px;
+  right: 30px;
+  height: 83px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.chapter {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+.chapter-line {
+  height: 42px;
+  width: 2px;
+  background: linear-gradient(transparent, #d9b67b, transparent);
+}
+.chapter small {
+  display: block;
+  font-size: 7px;
+  color: #92a5a3;
+  letter-spacing: 2px;
+}
+.chapter strong {
+  display: block;
+  font:
+    500 14px "Cinzel",
+    Georgia,
+    serif;
+  margin: 6px 0;
+  color: #e4dcc6;
+}
+.chapter > div > span {
+  font-size: 8px;
+  color: #6b8989;
+}
+.loadout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px;
+  background: linear-gradient(#152c35f2, #0b1b26f5);
+  border: 1px solid #9aa59038;
+  border-radius: 9px;
+  box-shadow: 0 10px 30px #07172255;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.weapon {
+  height: 58px;
+  min-width: 135px;
+  padding: 8px 13px 8px 10px;
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  background: #9bafad06;
+  border: 1px solid #a7b5ac15;
+  border-radius: 5px;
+  text-align: left;
+  position: relative;
+}
+.weapon kbd {
+  position: absolute;
+  top: 4px;
+  left: 5px;
+  border: 0;
+  padding: 0;
+  font-size: 8px;
+  color: #8da6a2;
+}
+.weapon.active {
+  background: #c9a46812;
+  border-color: #c5a36d99;
+  box-shadow: inset 0 0 15px #d4b77b08;
+}
+.weapon-icon {
+  font-size: 29px;
+  color: #a5b5b0;
+  width: 37px;
+  text-align: center;
+  margin-left: 5px;
+}
+.weapon.active .weapon-icon {
+  color: var(--gold);
+}
+.weapon > span:last-child {
+  font-size: 11px;
+  color: #d5dacb;
+}
+.weapon small {
+  display: block;
+  font-size: 8px;
+  color: #819c97;
+  margin-top: 5px;
+}
+.loadout-divider {
+  height: 36px;
+  width: 1px;
+  background: var(--border);
+  margin: 0 6px;
+}
+.dodge {
+  width: 64px;
+  padding: 0 4px;
+  position: relative;
+}
+.dodge kbd {
+  font-size: 9px;
+  display: block;
+  text-align: center;
+  padding: 5px;
+}
+.dodge > span {
+  font-size: 8px;
+  display: block;
+  text-align: center;
+  color: #8ba29e;
+  margin: 6px 0 4px;
+}
+.dodge i {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: #aebda5;
+  max-width: 100%;
+}
+.bottom-tools {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+.bottom-tools button {
+  background: #142932e8;
+  border: 1px solid #b6a37644;
+  border-radius: 5px;
+  padding: 10px 12px;
+  color: #d6c59e;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.bottom-tools button > span {
+  font-size: 17px;
+}
+.bottom-tools > span {
+  font-size: 8px;
+  color: #6e8e8c;
+}
+.key-strip {
+  position: absolute;
+  bottom: 16px;
+  display: flex;
+  justify-content: center;
+  gap: 26px;
+  width: 100%;
+  font-size: 8px;
+  color: #829f9a;
+}
+.key-strip > span {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+.key-strip kbd {
+  font-size: 7px;
+  padding: 3px 4px;
+  color: #b4c3b5;
+}
+.drawer {
+  position: absolute;
+  right: 30px;
+  bottom: 142px;
+  width: 365px;
+  max-height: calc(100vh - 250px);
+  overflow: auto;
+  padding: 27px;
+  background: #101f2af5;
+  border: 1px solid #b9a47766;
+  border-radius: 9px;
+  box-shadow: 0 20px 70px #04141dbb;
+  backdrop-filter: blur(15px);
+}
+.drawer-close {
+  position: absolute;
+  top: 9px;
+  right: 12px;
+  background: transparent;
+  color: #a4b8ae;
+  font-size: 23px;
+}
+.drawer h2 {
+  font:
+    400 23px/1.4 "Cinzel",
+    Georgia,
+    serif;
+  margin: 13px 0;
+}
+.drawer > p {
+  font-size: 11px;
+  line-height: 1.7;
+  color: #91a9a1;
+}
+.drawer .eyebrow {
+  color: var(--gold);
+  font-size: 8px;
+}
+.drawer dl {
+  font-size: 10px;
+  line-height: 1.6;
+}
+.drawer dt {
+  color: #dfc696;
+  margin-top: 13px;
+  font-weight: 500;
+}
+.drawer dd {
+  margin: 4px 0;
+  color: #9fb3aa;
+}
+.drawer .drawer-note {
+  font-size: 9px;
+  border-top: 1px solid var(--border);
+  padding-top: 15px;
+}
+.upgrade-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 20px 0;
+}
+.upgrade-list > button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 12px 10px;
+  background: #8da7a308;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.upgrade-list > button:hover:not(:disabled) {
+  border-color: var(--gold);
+}
+.upgrade-icon {
+  color: var(--gold);
+  font-size: 24px;
+}
+.upgrade-list strong {
+  font-size: 11px;
+  font-weight: 500;
+}
+.upgrade-list small {
+  display: block;
+  color: #9db0a5;
+  font-size: 8px;
+  margin: 4px 0;
+}
+.upgrade-list em {
+  font-size: 7px;
+  font-style: normal;
+  color: #748f86;
+}
+.upgrade-list b {
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--gold);
+}
+.primary {
+  background: #d8b67b;
+  border: 1px solid #f2d298;
+  color: #192b30;
+  padding: 17px 23px;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  font-weight: 700;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 42px;
+  box-shadow: 0 5px 20px #0002;
+  transition:
+    background 0.2s,
+    transform 0.2s;
+}
+.primary:hover {
+  background: #edcf97;
+  transform: translateY(-1px);
+}
+.primary > span {
+  font-size: 23px;
+  font-weight: 400;
+}
+.primary.small {
+  padding: 12px 15px;
+  font-size: 10px;
+  width: 100%;
+  gap: 10px;
+}
+#overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+.intro-overlay {
+  background: linear-gradient(
+    90deg,
+    #091822f5,
+    #091822ed 25%,
+    #09182280 53%,
+    #09182205 80%
+  );
+  display: flex;
+  align-items: center;
+}
+.intro-card {
+  margin-left: 9vw;
+  padding-bottom: 35px;
+  max-width: 620px;
+}
+.intro-crest {
+  width: 67px;
+  height: 73px;
+  color: var(--gold);
+  margin-bottom: 29px;
+}
+.intro-crest svg {
+  width: 100%;
+  height: 100%;
+}
+.intro-card .eyebrow {
+  font-size: 8px;
+  letter-spacing: 2.1px;
+  color: #bead87;
+}
+.intro-card h1 {
+  font:
+    400 clamp(42px, 4.8vw, 72px)/1.13 "Cinzel",
+    Georgia,
+    serif;
+  letter-spacing: -2px;
+  margin: 24px 0;
+  color: #ebe4d2;
+}
+.intro-card h1 > span {
+  color: var(--gold);
+}
+.intro-card p {
+  color: #a4b6ae;
+  font-size: 13px;
+  line-height: 1.95;
+  margin-bottom: 30px;
+}
+.intro-card .primary {
+  min-width: 245px;
+}
+.intro-details {
+  display: flex;
+  gap: 12px;
+  color: #92a79c;
+  font-size: 9px;
+  margin-top: 20px;
+  align-items: center;
+}
+.intro-details i {
+  font-style: normal;
+  color: var(--gold);
+  font-size: 8px;
+}
+.intro-footnote {
+  display: block;
+  font-size: 8px;
+  color: #667f79;
+  line-height: 1.9;
+  margin-top: 39px;
+}
+.intro-caption {
+  position: absolute;
+  bottom: 33px;
+  right: 35px;
+  font-size: 8px;
+  letter-spacing: 1.7px;
+  color: #c9d0bf;
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+.intro-caption > span:last-child {
+  color: #6c8e8a;
+  margin-left: 17px;
+  font-size: 7px;
+}
+.modal-overlay {
+  background: #091822bb;
+  backdrop-filter: blur(6px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.modal-card {
+  text-align: center;
+  background: #11242cf2;
+  border: 1px solid #b59a6755;
+  padding: 45px 60px;
+  max-width: 600px;
+  box-shadow: 0 20px 100px #0005;
+}
+.modal-card .intro-crest {
+  width: 52px;
+  height: 56px;
+  margin: 0 auto 24px;
+}
+.modal-card h1 {
+  font:
+    400 32px/1.3 "Cinzel",
+    Georgia,
+    serif;
+}
+.modal-card p {
+  font-size: 12px;
+  color: #a5b7a9;
+  line-height: 1.8;
+}
+.modal-card .primary {
+  margin: 26px auto 0;
+}
+.modal-card .text-btn {
+  margin: 15px auto 0;
+}
+.modal-card .eyebrow {
+  color: var(--gold);
+  font-size: 8px;
+}
+@media (min-width: 1700px) {
+  .topbar {
+    padding: 28px 40px;
+  }
+  .squad-panel {
+    left: 40px;
+    top: 140px;
+    width: 240px;
+  }
+  .map-panel {
+    right: 40px;
+    top: 140px;
+    width: 240px;
+  }
+  .map-wrap canvas {
+    height: 185px;
+  }
+  .fort-status {
+    right: 40px;
+    top: 470px;
+    width: 240px;
+  }
+  .defender {
+    padding: 12px;
+  }
+  .portrait {
+    width: 45px;
+    height: 45px;
+  }
+  .objective {
+    left: 40px;
+    bottom: 200px;
+  }
+}
+@media (max-width: 1000px) {
+  .topbar {
+    padding: 20px;
+  }
+  .brand {
+    font-size: 11px;
+  }
+  .brand > div > span {
+    font-size: 15px;
+  }
+  .brand small {
+    font-size: 6px;
+  }
+  .wave-panel {
+    width: 220px;
+  }
+  .resource small {
+    display: none;
+  }
+  .top-actions {
+    gap: 6px;
+  }
+  .squad-panel {
+    left: 15px;
+    width: 180px;
+    top: 110px;
+  }
+  .map-panel {
+    right: 15px;
+    width: 170px;
+    top: 110px;
+  }
+  .map-wrap canvas {
+    height: 125px;
+  }
+  .map-title .eyebrow {
+    font-size: 7px;
+    letter-spacing: 1px;
+  }
+  .fort-status {
+    right: 15px;
+    top: 375px;
+    width: 170px;
+  }
+  .fort-status .eyebrow {
+    font-size: 6px;
+  }
+  .objective {
+    left: 20px;
+    max-width: 180px;
+  }
+  .objective strong {
+    font-size: 12px;
+  }
+  .chapter {
+    display: none;
+  }
+  .bottom-tools {
+    margin-left: auto;
+  }
+  .loadout {
+    gap: 4px;
+  }
+  .weapon {
+    min-width: 107px;
+    padding: 7px;
+  }
+  .weapon-icon {
+    width: 27px;
+    font-size: 25px;
+  }
+  .bottom-bar {
+    left: 15px;
+    right: 15px;
+  }
+  .intro-card {
+    margin-left: 7vw;
+  }
+  .context {
+    font-size: 9px;
+    padding: 10px;
+  }
+  .key-strip {
+    gap: 14px;
+  }
+  .map-legend {
+    gap: 8px;
+    font-size: 7px;
+  }
+  .defender-info strong {
+    font-size: 11px;
+  }
+}
+@media (max-height: 700px) {
+  .objective {
+    display: none;
+  }
+  .squad-panel,
+  .map-panel {
+    top: 99px;
+  }
+  .fort-status {
+    top: 380px;
+  }
+  .intro-card {
+    padding: 0;
+  }
+  .intro-crest {
+    height: 45px;
+    margin-bottom: 12px;
+  }
+  .intro-card h1 {
+    margin: 15px 0;
+    font-size: 45px;
+  }
+  .intro-card p {
+    font-size: 11px;
+    margin-bottom: 20px;
+  }
+  .intro-footnote {
+    margin-top: 20px;
+  }
+  .intro-caption {
+    bottom: 15px;
+  }
+  .drawer {
+    max-height: calc(100vh - 180px);
+    bottom: 120px;
+  }
+}
+@media (max-width: 700px) {
+  .brand > div {
+    display: none;
+  }
+  .brand-fox {
+    border: 0;
+  }
+  .wave-panel {
+    width: 180px;
+  }
+  .top-actions .resource {
+    padding-right: 3px;
+    margin-right: 0;
+  }
+  .top-actions .icon-btn {
+    width: 25px;
+  }
+  .topbar {
+    padding: 15px;
+  }
+  .resource strong {
+    font-size: 14px;
+  }
+  .map-panel {
+    top: 92px;
+    width: 125px;
+    right: 10px;
+  }
+  .map-wrap canvas {
+    height: 95px;
+  }
+  .map-title {
+    margin-bottom: 7px;
+  }
+  .map-title .eyebrow {
+    font-size: 6px;
+  }
+  .map-legend,
+  .fronts b,
+  .fort-status,
+  .chapter,
+  .objective {
+    display: none;
+  }
+  .fronts {
+    gap: 3px;
+  }
+  .fronts > span {
+    font-size: 7px;
+  }
+  .squad-panel {
+    left: 10px;
+    top: 92px;
+    width: 143px;
+  }
+  .squad-panel > .eyebrow {
+    font-size: 6px;
+    letter-spacing: 1px;
+  }
+  .defender {
+    padding: 6px;
+    gap: 7px;
+  }
+  .portrait {
+    width: 33px;
+    height: 33px;
+    transform: scale(0.85);
+    margin-left: -3px;
+  }
+  .defender-info strong {
+    font-size: 9px;
+  }
+  .defender-info > div > span {
+    font-size: 5px;
+  }
+  .defender-info small {
+    font-size: 6px;
+  }
+  .text-btn {
+    font-size: 8px;
+  }
+  .loadout {
+    bottom: 12px;
+  }
+  .weapon {
+    min-width: 98px;
+    height: 48px;
+  }
+  .dodge {
+    width: 51px;
+  }
+  .bottom-tools {
+    display: none;
+  }
+  .key-strip {
+    gap: 9px;
+    bottom: 12px;
+    font-size: 6px;
+    flex-wrap: wrap;
+    padding: 0 10px;
+  }
+  .key-strip kbd {
+    font-size: 6px;
+  }
+  .context {
+    bottom: 150px;
+    white-space: normal;
+    width: 85%;
+    text-align: center;
+    line-height: 2;
+  }
+  .notice {
+    top: 78px;
+    font-size: 9px;
+    max-width: 50%;
+    min-width: 190px;
+  }
+  .intro-card {
+    margin: 0 8vw;
+  }
+  .intro-card h1 {
+    font-size: 39px;
+  }
+  .intro-card p {
+    font-size: 11px;
+  }
+  .intro-card .eyebrow {
+    font-size: 6px;
+  }
+  .intro-details {
+    font-size: 7px;
+    gap: 8px;
+  }
+  .intro-caption {
+    display: none;
+  }
+  .intro-overlay {
+    background: #091822bd;
+  }
+  .drawer {
+    right: 10px;
+    bottom: 138px;
+    width: calc(100vw - 20px);
+    max-width: 365px;
+  }
+  .modal-card {
+    padding: 30px;
+    max-width: 90%;
+  }
+  .modal-card h1 {
+    font-size: 25px;
+  }
+}
