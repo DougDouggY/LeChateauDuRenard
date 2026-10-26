@@ -817,7 +817,8 @@ export class Renderer {
   }
   frontPointers(c: Ctx, g: Simulation, fronts: FrontState[]) {
     if (!g.started || g.phase !== "assault") return;
-    const pad = Math.min(290, Math.max(170, this.w * 0.215)),
+    // Include half the badge width so it clears both HUD side panels.
+    const pad = Math.min(375, Math.max(180, this.w * 0.34), this.w / 2 - 90),
       top = 122,
       bottom = this.h - 150;
     for (const f of fronts)
