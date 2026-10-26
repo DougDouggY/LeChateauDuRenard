@@ -31,6 +31,7 @@ import {
   POSTS,
   SUPPLY_POSTS,
   sideOf,
+  FORT,
 } from "./map";
 import { updateAllies, updateEnemies } from "./strategy";
 import { Workshop } from "./workshop";
@@ -40,6 +41,7 @@ import { powerImpact, effect } from "./powers";
 export class Simulation {
   time = 0;
   tick = 0;
+  navigationSearches = 0;
   nextId = 100;
   walls = makeWalls();
   defenders: Defender[] = [];
@@ -148,6 +150,7 @@ export class Simulation {
       side: i === 1 ? 0 : 2,
       path: [],
       pathTime: 0,
+      pathGoal: null,
       mounted: null,
       carried: null,
       ammo: 24,
@@ -251,7 +254,11 @@ export class Simulation {
     this.messageTime = 4;
   }
   particlesAt(p: Vec, color: string, count = 10) {
-    for (let i = 0; i < count; i++) {
+    for (
+      let i = 0;
+      i < Math.min(count, Math.max(0, 450 - this.particles.length));
+      i++
+    ) {
       const a = Math.random() * Math.PI * 2,
         s = 30 + Math.random() * 130;
       this.particles.push({
@@ -269,6 +276,8 @@ export class Simulation {
     if (e.hp <= 0) return;
     e.hp -= n;
     e.hurt = 0.18;
+    if (n >= 1 && this.effects.filter((f) => f.kind === "damage").length < 36)
+      effect(this, "damage", e, "#eedbc1", 12, 0.55, { amount: Math.round(n) });
     this.particlesAt(e, e.kind === "skeleton" ? "#e7d4a3" : "#b6b64f", 5);
     if (e.hp <= 0) {
       e.dead = 0.7;
@@ -676,31 +685,51 @@ export class Simulation {
       think: 0,
       path: [],
       pathTime: 0,
+      pathGoal: null,
     });
   }
   navigate(d: Defender | Enemy, target: Vec, dt: number, speed: number) {
     d.pathTime -= dt;
-    if (d.pathTime <= 0 || !d.path.length) {
+    const inside = (p: Vec) =>
+      p.x > FORT.left + 32 &&
+      p.x < FORT.right - 32 &&
+      p.y > FORT.top + 32 &&
+      p.y < FORT.bottom - 32;
+    // The raised deck is convex and has no internal obstacles. Walk directly
+    // instead of repeatedly building a grid path for ordinary patrols.
+    if (inside(d) && inside(target)) {
+      d.path = [];
+      d.pathGoal = { ...target };
+      const dist = distance(d, target);
+      if (dist < 8) return;
+      const dir = toward(d, target),
+        step = Math.min(dist, speed * dt);
+      if (move(d, dir.x * step, dir.y * step, d.radius, this.walls)) {
+        d.walk += step / 25;
+        d.moving = true;
+        d.moveFacing = Math.atan2(dir.y, dir.x);
+        d.facing = d.moveFacing;
+      }
+      return;
+    }
+    const changed = !d.pathGoal || distance(d.pathGoal, target) > 60;
+    if (d.pathTime <= 0 || (changed && d.pathTime < 0.65)) {
+      this.navigationSearches++;
       d.path = findPath(d, target, this.walls, d.radius);
-      d.pathTime = 0.9 + Math.random() * 0.3;
+      d.pathGoal = { ...target };
+      d.pathTime = 0.9;
     }
     while (d.path.length && distance(d, d.path[0]) < 14) d.path.shift();
     const point = d.path[0];
     if (!point) return;
-    const dir = toward(d, point);
-    const moved = move(
-      d,
-      dir.x * speed * dt,
-      dir.y * speed * dt,
-      d.radius,
-      this.walls,
-    );
-    if (moved) {
-      d.walk += (dt * speed) / 25;
+    const dir = toward(d, point),
+      step = Math.min(distance(d, point), speed * dt);
+    if (move(d, dir.x * step, dir.y * step, d.radius, this.walls)) {
+      d.walk += step / 25;
       d.moving = true;
       d.moveFacing = Math.atan2(dir.y, dir.x);
       d.facing = d.moveFacing;
-    } else d.pathTime = 0;
+    } else d.pathTime = Math.min(d.pathTime, 0.15);
   }
   update(dt: number, input: Input, aim: Vec) {
     if (!this.started || this.paused || this.phase === "defeat") return;
@@ -805,6 +834,7 @@ export class Simulation {
         }
       }
       p.facing = Math.atan2(aim.y - p.y, aim.x - p.x);
+      p.side = sideOf(p);
       if (p.mounted !== null) this.ballistas[p.mounted].angle = p.facing;
       const placing = this.placement !== null;
       if (placing && input.clicked) this.placeOrder(aim);

@@ -4,7 +4,17 @@ Prototype jouable de défense de château, TypeScript / Canvas 2D / Vite.
 
 **Jouer : https://dougdouggy.github.io/LeChateauDuRenard/**
 
-## Version 0.3 — huit capuches, huit pouvoirs
+## Version 0.4 — fronts lisibles et rendu optimisé
+
+Les fronts attaqués restent éclairés sur la plateforme. Des indicateurs de bord d’écran guident vers les attaques hors champ ; la mission indique le front prioritaire. La mini-carte affiche pour chaque direction le nombre d’ennemis vivants, l’intégrité du rempart et ses brèches. **M**, ou le bouton « Vue d’ensemble », montre tout le château ; une seconde activation reprend le suivi de l’archer.
+
+Les monstres portent toujours une barre de vie ; les dégâts apparaissent au-dessus d’eux. Les remparts attaqués ou endommagés affichent leur santé, avec valeurs numériques lorsqu’ils sont abîmés. Les projectiles ennemis ont une traînée orange visible ; un avertissement précède leurs tirs.
+
+Le terrain et les remparts sont composités en cache, les sprites et leurs traitements de couleur sont précalculés, et les éléments hors champ sont écartés du dessin. La résolution de rendu s’adapte aux ralentissements. Les déplacements sur la plateforme ouverte évitent les recherches de chemin inutiles ; les trajets impossibles sont réessayés périodiquement.
+
+Mesure locale Chromium sans accélération matérielle, 64 ennemis et densité de pixels fixée à 2 : temps moyen de dessin JavaScript passé de 196,55 à 1,79 ms ; intervalle moyen entre images passé de 611 à 40 ms. Ce scénario de charge compare la même machine et ne garantit pas une fréquence identique sur tous les appareils.
+
+## Huit capuches, huit pouvoirs
 
 Avant chaque partie, choisir le personnage J1 puis les deux compagnons IA parmi **huit archers à capuche**. Cliquer sur le membre de la garde à personnaliser, puis sur son archer. Les trois membres sont distincts : sélectionner un archer déjà attribué échange les deux places. Tous sont disponibles sans achat.
 
@@ -65,6 +75,7 @@ La réserve est un coffre illustré à carquois sur un socle de pierre. L’acc�
 | Ordres individuels aux compagnons  | Tab                                            |
 | Aide / pause                       | H / Échap                                      |
 | Zoom                               | Molette                                        |
+| Vue d’ensemble / retour au suivi   | M ou bouton sous la mini-carte                 |
 
 Les défenseurs à terre reviennent après 12 s. Défaite s’ils sont tous simultanément à terre ou si l’intégrité tombe sous 12 %. Vagues infinies, aucun boss. Gobelins et squelettes archers, incendiaires, diablotins rapides et brutes attaquent progressivement différents fronts. Les tireurs s’arrêtent pour lancer des projectiles esquivables ; les unités de mêlée peuvent entrer après une brèche.
 
@@ -75,7 +86,7 @@ Node.js 22.12+ et npm ; validation avec Node 24. Aucune clé, base de données o
 ```sh
 npm ci
 npm run dev -- --port 5173
-npm test                 # 32 tests de simulation, dont les huit pouvoirs
+npm test                 # 37 tests de simulation, pouvoirs, fronts et navigation
 npm run build            # TypeScript et bundle de production
 npm run test:browser     # Sélection, contrôles, pouvoir, alertes, une manche réelle et livraisons
 npm run test:production  # Bundle servi sous /LeChateauDuRenard/
@@ -84,19 +95,21 @@ npm run preview
 
 Les tests navigateur utilisent `/usr/bin/chromium` ou `CHROMIUM_PATH`. Le parcours principal démarre son propre serveur sur 5174 et l’arrête après les tests. Captures réelles et résultats dans `artifacts/`, ignoré par Git. Le paramètre `?test` expose l’état de diagnostic ; le mode normal ne l’expose pas.
 
-| Module              | Rôle                                                                |
-| ------------------- | ------------------------------------------------------------------- |
-| `src/heroes.ts`     | Huit profils, palettes, pouvoirs, coûts et délais                   |
-| `src/powers.ts`     | Impacts, zones, soins, foudre et effets visuels de simulation       |
-| `src/simulation.ts` | État, encoche/lâcher, projectiles, or, dégâts, manches et placement |
-| `src/workshop.ts`   | Arrivée de Gaspard, commandes, livraison et installation            |
-| `src/map.ts`        | Plateforme, remparts, emplacements, collisions et navigation A*     |
-| `src/strategy.ts`   | Compagnons et ennemis, pouvoirs IA et statuts de contrôle           |
-| `src/animation.ts`  | Poses de marche/tir et cadrage des atlas                            |
-| `src/combat.ts`     | Hauteur des projectiles partagée entre rendu et collisions          |
-| `src/renderer.ts`   | Sprites, terrain, lumière, effets, portraits et mini-carte          |
-| `src/ui.ts`         | Sélection de la garde, HUD, annonce centrale, catalogue et ordres   |
-| `src/main.ts`       | Entrées, boucle fixe à 60 Hz et sons                                |
+| Module                | Rôle                                                                |
+| --------------------- | ------------------------------------------------------------------- |
+| `src/heroes.ts`       | Huit profils, palettes, pouvoirs, coûts et délais                   |
+| `src/powers.ts`       | Impacts, zones, soins, foudre et effets visuels de simulation       |
+| `src/simulation.ts`   | État, encoche/lâcher, projectiles, or, dégâts, manches et placement |
+| `src/workshop.ts`     | Arrivée de Gaspard, commandes, livraison et installation            |
+| `src/map.ts`          | Plateforme, remparts, emplacements, collisions et navigation A*     |
+| `src/strategy.ts`     | Compagnons et ennemis, pouvoirs IA et statuts de contrôle           |
+| `src/animation.ts`    | Poses de marche/tir et cadrage des atlas                            |
+| `src/combat.ts`       | Hauteur des projectiles partagée entre rendu et collisions          |
+| `src/fronts.ts`       | Menaces, intégrité par front et priorité de défense                 |
+| `src/render-cache.ts` | Cache des sprites précadrés et traitements de couleur               |
+| `src/renderer.ts`     | Sprites, terrain, lumière, effets, portraits et mini-carte          |
+| `src/ui.ts`           | Sélection de la garde, HUD, annonce centrale, catalogue et ordres   |
+| `src/main.ts`         | Entrées, boucle fixe à 60 Hz et sons                                |
 
 ## Hébergement gratuit
 

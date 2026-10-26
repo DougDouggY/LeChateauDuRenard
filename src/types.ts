@@ -49,6 +49,7 @@ export interface Defender extends Actor {
   side: Side;
   path: Vec[];
   pathTime: number;
+  pathGoal: Vec | null;
   mounted: number | null;
   carried: number | null;
   ammo: number;
@@ -65,6 +66,7 @@ export interface Enemy extends Actor {
   think: number;
   path: Vec[];
   pathTime: number;
+  pathGoal: Vec | null;
 }
 export interface Wall extends Vec {
   id: number;
@@ -159,7 +161,8 @@ export interface Delivery {
 
 export interface CombatEffect extends Vec {
   id: number;
-  kind: "explosion" | "frost" | "lightning" | "heal" | "coins" | "ammo";
+  kind:
+    "explosion" | "frost" | "lightning" | "heal" | "coins" | "ammo" | "damage";
   life: number;
   total: number;
   color: string;

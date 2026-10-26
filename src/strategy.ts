@@ -1,6 +1,7 @@
 import type { Simulation } from "./simulation";
 import { type Vec, type Side, distance, toward } from "./types";
 import { POSTS, sideOf, move } from "./map";
+import { nearRampart } from "./fronts";
 export function updateAllies(g: Simulation, dt: number) {
   const alive = g.enemies.filter((e) => e.hp > 0);
   for (const d of g.defenders.slice(1)) {
@@ -11,7 +12,13 @@ export function updateAllies(g: Simulation, dt: number) {
         side,
         score:
           alive.filter((e) => e.side === side).length -
-          (g.defenders.some((o) => o !== d && o.dead <= 0 && o.side === side)
+          (g.defenders.some(
+            (o) =>
+              o !== d &&
+              o.dead <= 0 &&
+              o.side === side &&
+              (o.id !== 0 || nearRampart(o)),
+          )
             ? 2
             : 0),
       }))

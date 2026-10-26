@@ -2105,3 +2105,164 @@ kbd {
     width: 22px;
   }
 }
+/* Static compositor vignette: avoid repainting a full-size Canvas gradient. */
+#game {
+  z-index: 0;
+}
+#app::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 27%,
+    #05131a88 100%
+  );
+}
+#hud {
+  z-index: 2;
+}
+.fronts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  padding: 12px 0 9px;
+  border: 0;
+}
+.front-card {
+  min-width: 0;
+  padding: 8px 8px 10px;
+  position: relative;
+  border: 1px solid #8ca69b26;
+  border-radius: 4px;
+  background: #10242bdc;
+  overflow: hidden;
+}
+.front-card > div {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.front-card i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #638c7d;
+  flex-shrink: 0;
+}
+.front-card strong {
+  font-size: 8px;
+  color: #a1b4aa;
+  font-weight: 600;
+}
+.front-card b {
+  margin-left: auto;
+  font-size: 7px;
+  font-weight: 400;
+  color: #83a394;
+}
+.front-card > span {
+  font-size: 7px;
+  display: block;
+  color: #829b90;
+  margin-top: 5px;
+  white-space: nowrap;
+}
+.front-card em {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: #88b299;
+}
+.front-card.attacked {
+  border-color: var(--front-color);
+}
+.front-card.attacked strong,
+.front-card.attacked b {
+  color: var(--front-color);
+}
+.front-card.attacked i {
+  background: #edb47f;
+  box-shadow: 0 0 7px #e9ad7d80;
+}
+.front-card.breached > span {
+  color: #eea48c;
+}
+.front-card.breached em {
+  background: #ef9b80;
+}
+.overview-button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: #142d34de;
+  border: 1px solid #bdad7b44;
+  border-radius: 4px;
+  color: #d5c5a1;
+  font-size: 9px;
+}
+.overview-button[aria-pressed="true"] {
+  border-color: #d6b67c;
+  color: #f1d09a;
+  background: #ad94541a;
+}
+.overview-button kbd {
+  font-size: 7px;
+}
+.fort-status {
+  top: 516px;
+}
+@media (min-width: 1700px) {
+  .fort-status {
+    top: 550px;
+  }
+}
+@media (max-width: 1000px) {
+  .fort-status {
+    top: 445px;
+  }
+  .front-card {
+    padding: 6px 5px 8px;
+  }
+  .front-card b {
+    font-size: 6px;
+  }
+  .front-card strong {
+    font-size: 7px;
+  }
+  .front-card > span {
+    font-size: 6px;
+  }
+}
+@media (max-width: 700px) {
+  .fronts {
+    gap: 4px;
+  }
+  .front-card {
+    padding: 5px 4px 7px;
+  }
+  .front-card > div {
+    gap: 3px;
+  }
+  .front-card b {
+    display: none;
+  }
+  .front-card strong {
+    font-size: 7px;
+  }
+  .front-card > span {
+    font-size: 5px;
+  }
+  .overview-button {
+    font-size: 7px;
+    padding: 6px;
+  }
+  .map-panel .map-legend {
+    display: none;
+  }
+}

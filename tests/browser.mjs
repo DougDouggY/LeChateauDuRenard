@@ -623,6 +623,41 @@ try {
     await page.evaluate(() => (window.__game().phase = "defeat"));
     await page.getByRole("button", { name: "Reprendre la garde" }).click();
   }
+  await page.getByRole("button", { name: "Prendre la garde" }).click();
+  await page.evaluate(() => {
+    const g = window.__game();
+    g.startWave();
+    g.spawnLeft = 0;
+    g.waveAlert = null;
+    g.spawn("brute", 1);
+    g.spawn("goblin", 3);
+    g.walls.find((w) => w.side === 1).hp = 0;
+    g.remaining = 10000;
+  });
+  await page.waitForFunction(() =>
+    document.querySelector('[data-front="1"]')?.textContent.includes("brèche"),
+  );
+  assert.match(await page.locator('[data-front="1"]').innerText(), /1 ennemis/);
+  check(
+    "Active fronts show living enemies, damaged wall integrity and breaches",
+  );
+  const previousZoom = await page.evaluate(() => window.__renderer.zoom);
+  await page.keyboard.press("m");
+  await page.waitForFunction(() => window.__renderer.overview);
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector("#overview-button")
+        .getAttribute("aria-pressed") === "true",
+  );
+  await page.screenshot({ path: "artifacts/tactical-overview.png" });
+  await page.getByRole("button", { name: "Vue d’ensemble" }).click();
+  await page.waitForFunction(() => !window.__renderer.overview);
+  assert.equal(await page.evaluate(() => window.__renderer.zoom), previousZoom);
+  check(
+    "M shows the entire castle; the overview button restores the player's zoom",
+  );
+  await page.screenshot({ path: "artifacts/front-guidance.png" });
   assert.deepEqual(errors, []);
   check("No browser JavaScript or console errors");
   await writeFile(

@@ -17,11 +17,22 @@ import {
   FLOOR_HEIGHT,
   CENTRAL_STAIR,
   elevation,
+  insideFort,
 } from "./map";
 import { projectileHeight } from "./combat";
 import { archerFrame, WALK_ROWS, SHOT_ROWS, spriteFrame } from "./animation";
 import { hero, WALK_SHEETS, SHOT_SHEETS } from "./heroes";
 import type { Workshop } from "./workshop";
+import { RenderCache } from "./render-cache";
+import {
+  frontState,
+  priorityFront,
+  FRONT_COLORS,
+  DEFENSE_POSTS,
+  SECTOR_BANDS,
+  type FrontState,
+} from "./fronts";
+import { SIDES } from "./types";
 type Ctx = CanvasRenderingContext2D;
 const P = (x: number, y: number, z = 0) => ({ x, y: y * 0.72 - z });
 function path(
@@ -120,6 +131,64 @@ export class Renderer {
   floorProps = new Image();
   floorPropsReady = false;
   portraits = new Map<number, string>();
+  cache = new RenderCache();
+  miniTerrain: HTMLCanvasElement | null = null;
+  sceneTerrain: HTMLCanvasElement | null = null;
+  private sceneSignature = "";
+  overview = false;
+  private savedZoom = 0.8;
+  toggleOverview() {
+    this.overview = !this.overview;
+    if (this.overview) this.savedZoom = this.zoom;
+    else this.zoom = this.savedZoom;
+  }
+  autoQuality = true;
+  qualityRatio = 2;
+  private slowFrames = 0;
+  private fastFrames = 0;
+  drawCalls = 0;
+  get view() {
+    const halfW = this.w / (2 * this.zoom),
+      halfH = this.h / (2 * this.zoom);
+    return {
+      left: this.camera.x - halfW,
+      right: this.camera.x + halfW,
+      top: this.camera.y * 0.72 - halfH,
+      bottom: this.camera.y * 0.72 + halfH,
+    };
+  }
+  visible(p: Vec, z = elevation(p), top = 180, bottom = 25, width = 85) {
+    const v = this.view,
+      y = p.y * 0.72 - z;
+    return (
+      p.x + width >= v.left &&
+      p.x - width <= v.right &&
+      y + bottom >= v.top &&
+      y - top <= v.bottom
+    );
+  }
+  observeFrame(ms: number) {
+    if (!this.autoQuality) return;
+    if (ms > 30) {
+      this.slowFrames += Math.min(ms, 100);
+      this.fastFrames = 0;
+    } else {
+      this.slowFrames = Math.max(0, this.slowFrames - 40);
+      this.fastFrames = ms < 20 ? this.fastFrames + ms : 0;
+    }
+    if (this.slowFrames > 900 && this.dpr > 1) {
+      this.qualityRatio = Math.max(1, this.dpr - 0.25);
+      this.slowFrames = 0;
+      this.resize();
+    } else if (
+      this.fastFrames > 10000 &&
+      this.dpr < Math.min(2, window.devicePixelRatio || 1)
+    ) {
+      this.qualityRatio = Math.min(2, this.dpr + 0.25);
+      this.fastFrames = 0;
+      this.resize();
+    }
+  }
   assetError = false;
   get ready() {
     return (
@@ -189,6 +258,9 @@ export class Renderer {
     ]) {
       const loaded = image.onload;
       image.onload = (e) => {
+        this.cache.clear();
+        this.miniTerrain = null;
+        this.sceneTerrain = null;
         if (loaded) loaded.call(image, e);
         window.dispatchEvent(new Event("hero-art-ready"));
       };
@@ -227,7 +299,7 @@ export class Renderer {
   resize() {
     this.w = window.innerWidth;
     this.h = window.innerHeight;
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.dpr = Math.min(window.devicePixelRatio || 1, this.qualityRatio);
     this.canvas.width = this.w * this.dpr;
     this.canvas.height = this.h * this.dpr;
     this.canvas.style.width = `${this.w}px`;
@@ -391,16 +463,43 @@ export class Renderer {
       );
     }
   }
+  fortScene(g: Simulation): HTMLCanvasElement {
+    const signature = g.walls
+      .map((w) => (w.hp <= 0 ? 0 : w.hp < w.maxHp * 0.65 ? 1 : 2))
+      .join("");
+    if (!this.sceneTerrain) {
+      this.sceneTerrain = document.createElement("canvas");
+      this.sceneTerrain.width = this.terrain.width;
+      this.sceneTerrain.height = this.terrain.height;
+      this.sceneSignature = "";
+    }
+    if (signature !== this.sceneSignature) {
+      const ctx = this.sceneTerrain.getContext("2d")!;
+      ctx.clearRect(0, 0, this.sceneTerrain.width, this.sceneTerrain.height);
+      ctx.drawImage(this.terrain, 0, 0);
+      for (const wall of g.walls) this.wallArt(ctx, wall);
+      this.sceneSignature = signature;
+    }
+    return this.sceneTerrain;
+  }
   render(g: Simulation, dt: number, aim: Vec) {
     const c = this.ctx,
       p = g.player;
-    if (g.started) {
+    if (this.overview) {
+      this.camera.x = 1200;
+      this.camera.y = 1100;
+    } else if (g.started) {
       this.camera.x += (p.x - this.camera.x) * (1 - Math.exp(-dt * 5));
       this.camera.y += (p.y - 90 - this.camera.y) * (1 - Math.exp(-dt * 5));
     } else {
       this.camera.x = 1200;
       this.camera.y = 1100;
     }
+    if (this.overview)
+      this.zoom = Math.min(
+        (this.w - Math.min(430, this.w * 0.25)) / 1780,
+        (this.h - 220) / 1120,
+      );
     // Keep the viewport inside the world when following a defender at an edge.
     this.zoom = Math.max(
       this.zoom,
@@ -422,14 +521,29 @@ export class Renderer {
         (Math.random() - 0.5) * g.shake,
     );
     c.scale(this.zoom, this.zoom);
-    c.drawImage(this.terrain, 0, 0);
+    c.drawImage(this.fortScene(g), 0, 0);
+    this.drawCalls = 1;
+    const fronts = frontState(g);
+    this.frontZones(c, g, fronts);
     const objects: { depth: number; draw: () => void }[] = [];
     objects.push({
       depth: CENTRAL_STAIR.y * 0.72 - 10,
       draw: () => this.centralAccess(c, g),
     });
     for (const w of g.walls)
-      objects.push({ depth: w.y * 0.72 + 6, draw: () => this.wall(c, w) });
+      if (
+        this.visible(
+          w,
+          0,
+          (w.h * 0.72) / 2 + 110,
+          (w.h * 0.72) / 2 + 30,
+          w.w / 2 + 40,
+        )
+      )
+        objects.push({
+          depth: w.y * 0.72 + 6,
+          draw: () => this.wall(c, w, fronts[w.side].active),
+        });
     for (const pos of [
       [530, 490],
       [1870, 490],
@@ -468,10 +582,11 @@ export class Renderer {
         draw: () => this.ballista(c, b, g.time),
       });
     for (const a of [...g.defenders, ...g.enemies])
-      objects.push({
-        depth: a.y * 0.72,
-        draw: () => this.actor(c, a, g.time, a.id === 0),
-      });
+      if (this.visible(a))
+        objects.push({
+          depth: a.y * 0.72,
+          draw: () => this.actor(c, a, g.time, a.id === 0),
+        });
     for (const q of g.pickups) {
       const pp = P(q.x, q.y, elevation(q));
       c.save();
@@ -492,9 +607,13 @@ export class Renderer {
       c.restore();
     }
     objects.sort((a, b) => a.depth - b.depth);
-    for (const o of objects) o.draw();
+    for (const o of objects) {
+      o.draw();
+      this.drawCalls++;
+    }
     // Ballistic arcs are independent of wall collision, so bolts clear the parapets.
     for (const q of g.projectiles) {
+      if (!this.visible(q, elevation(q) + 65, 120, 100, 110)) continue;
       const z = projectileHeight(q),
         pp = P(q.x, q.y, z),
         dir = Math.atan2(q.vy * 0.72, q.vx);
@@ -532,29 +651,31 @@ export class Renderer {
             lightning: "#9ef5f2",
           };
           c.shadowColor = colors[q.power];
-          c.shadowBlur = 12;
+          c.shadowBlur = 0;
           line(c, [-64, 0], [-30, 0], colors[q.power], 3);
           c.shadowBlur = 0;
         }
-        if (q.team === "enemy") c.filter = "brightness(.7) sepia(.5)";
-        const w = q.kind === "bolt" ? 83 : q.power ? 64 : 53;
-        c.drawImage(
+        const w =
+          q.kind === "bolt" ? 83 : q.power ? 64 : q.team === "enemy" ? 60 : 53;
+        const sprite = this.cache.sprite(
+          `arrow:${index}:${w}`,
           this.arrowAtlas,
           ((index % 4) * this.arrowAtlas.width) / 4,
           ((index < 4 ? 390 : 675) * this.arrowAtlas.height) / 1254,
           this.arrowAtlas.width / 4,
           (190 * this.arrowAtlas.height) / 1254,
-          -w * 0.86,
-          -w * 0.3,
           w,
           w * 0.6,
         );
-        c.filter = "none";
+        if (q.team === "enemy") line(c, [-75, 0], [-20, 0], "#f5a384", 2.5);
+        else if (!q.power) line(c, [-49, 0], [-24, 0], "#e7dab17a", 1.5);
+        c.drawImage(sprite, -w * 0.86, -w * 0.3, w, w * 0.6);
       } else
         line(c, [-28, 0], [8, 0], q.team === "ally" ? "#e5d9bc" : "#d89773", 3);
       c.restore();
     }
     for (const q of g.particles) {
+      if (!this.visible(q, elevation(q) + 14, 15, 15, 15)) continue;
       const pp = P(q.x, q.y, elevation(q) + 14);
       c.globalAlpha = clamp(q.life / 0.4, 0, 1);
       c.fillStyle = q.color;
@@ -600,25 +721,157 @@ export class Renderer {
       c.globalAlpha = 1;
     }
     c.restore();
-    const vignette = c.createRadialGradient(
-      this.w / 2,
-      this.h / 2,
-      this.h * 0.22,
-      this.w / 2,
-      this.h / 2,
-      this.w * 0.7,
-    );
-    vignette.addColorStop(0, "#07151c00");
-    vignette.addColorStop(1, "#05131a99");
-    c.fillStyle = vignette;
-    c.fillRect(0, 0, this.w, this.h);
+    this.frontPointers(c, g, fronts);
+  }
+
+  frontZones(c: Ctx, g: Simulation, fronts: FrontState[]) {
+    if (!g.started) return;
+    for (const f of fronts) {
+      const preview = g.wave === 0 && g.phase === "preparation" && f.side === 0;
+      if (!f.active && !preview) continue;
+      const b = SECTOR_BANDS[f.side],
+        p = P(b.x, b.y, FLOOR_HEIGHT),
+        color = FRONT_COLORS[f.side];
+      c.save();
+      c.fillStyle = color;
+      c.globalAlpha = f.active ? 0.09 + 0.025 * Math.sin(g.time * 3) : 0.045;
+      c.fillRect(p.x, p.y, b.w, b.h * 0.72);
+      c.globalAlpha = 0.7;
+      c.strokeStyle = color;
+      c.lineWidth = 2;
+      c.setLineDash([14, 11]);
+      c.strokeRect(p.x + 4, p.y + 4, b.w - 8, b.h * 0.72 - 8);
+      c.setLineDash([]);
+      c.globalAlpha = 1;
+      const target = DEFENSE_POSTS[f.side],
+        label = P(target.x, target.y, FLOOR_HEIGHT);
+      c.fillStyle = "#10232be8";
+      c.strokeStyle = color;
+      c.lineWidth = 1;
+      c.beginPath();
+      c.roundRect(label.x - 129, label.y - 24, 258, 48, 5);
+      c.fill();
+      c.stroke();
+      c.font = "bold 13px sans-serif";
+      c.fillStyle = color;
+      c.textAlign = "center";
+      c.fillText(
+        `${SIDES[f.side].toUpperCase()} · ${f.enemies ? `${f.enemies} ENNEMI${f.enemies > 1 ? "S" : ""}` : f.active ? "EN APPROCHE" : "PROCHAIN ASSAUT"}`,
+        label.x,
+        label.y - 5,
+      );
+      c.font = "10px sans-serif";
+      c.fillStyle = "#d3d7c2";
+      c.fillText(
+        `DÉFENDRE ICI · REMPART ${Math.round(f.integrity * 100)} %${f.breaches ? " · BRÈCHE !" : ""}`,
+        label.x,
+        label.y + 12,
+      );
+      const a = [-Math.PI / 2, 0, Math.PI / 2, Math.PI][f.side];
+      for (const offset of [-210, 210]) {
+        const x = target.x + (f.side % 2 === 0 ? offset : 0),
+          y = target.y + (f.side % 2 === 1 ? offset : 0),
+          q = P(x, y, FLOOR_HEIGHT);
+        c.save();
+        c.translate(q.x, q.y);
+        c.scale(1, 0.72);
+        c.rotate(a);
+        path(
+          c,
+          [
+            [14, 0],
+            [-8, -12],
+            [-3, 0],
+            [-8, 12],
+          ],
+          color,
+          "#182f39",
+          1,
+        );
+        c.restore();
+      }
+      c.restore();
+    }
+    const focus = priorityFront(g, fronts);
+    if (focus && insideFort(g.player)) {
+      const target = DEFENSE_POSTS[focus.side],
+        dist = Math.hypot(target.x - g.player.x, target.y - g.player.y);
+      if (dist > 185) {
+        const t = Math.min(1, 235 / dist),
+          a = P(g.player.x, g.player.y, FLOOR_HEIGHT),
+          b = P(
+            g.player.x + (target.x - g.player.x) * t,
+            g.player.y + (target.y - g.player.y) * t,
+            FLOOR_HEIGHT,
+          );
+        c.save();
+        c.strokeStyle = FRONT_COLORS[focus.side];
+        c.globalAlpha = 0.55;
+        c.lineWidth = 2;
+        c.setLineDash([6, 10]);
+        line(c, [a.x, a.y], [b.x, b.y], FRONT_COLORS[focus.side], 2);
+        c.setLineDash([]);
+        c.restore();
+      }
+    }
+  }
+  frontPointers(c: Ctx, g: Simulation, fronts: FrontState[]) {
+    if (!g.started || g.phase !== "assault") return;
+    const pad = Math.min(290, Math.max(170, this.w * 0.215)),
+      top = 122,
+      bottom = this.h - 150;
+    for (const f of fronts)
+      if (f.active) {
+        const p = this.screen(DEFENSE_POSTS[f.side]);
+        if (p.x > pad && p.x < this.w - pad && p.y > top && p.y < bottom)
+          continue;
+        const x = clamp(p.x, pad, this.w - pad),
+          y = clamp(p.y, top, bottom),
+          color = FRONT_COLORS[f.side];
+        c.save();
+        c.fillStyle = "#0c1f2bef";
+        c.strokeStyle = color;
+        c.lineWidth = 1;
+        c.beginPath();
+        c.roundRect(x - 83, y - 18, 166, 36, 5);
+        c.fill();
+        c.stroke();
+        c.font = "bold 12px sans-serif";
+        c.fillStyle = color;
+        c.textAlign = "center";
+        c.fillText(
+          `${["↑", "→", "↓", "←"][f.side]} ${SIDES[f.side].toUpperCase()} · ${f.enemies || "EN APPROCHE"}${f.breaches ? " !" : ""}`,
+          x,
+          y + 4,
+        );
+        c.restore();
+      }
   }
   combatEffect(c: Ctx, e: CombatEffect) {
+    if (
+      !this.visible(
+        e,
+        elevation(e) + 30,
+        e.radius + 120,
+        e.radius + 70,
+        e.radius + 70,
+      )
+    )
+      return;
     const progress = 1 - e.life / e.total,
       p = P(e.x, e.y, elevation(e));
     c.save();
     c.globalAlpha = Math.min(1, e.life / 0.2);
-    if (e.kind === "coins") {
+    if (e.kind === "damage") {
+      c.fillStyle = "#101e28";
+      c.font = "bold 14px sans-serif";
+      c.textAlign = "center";
+      c.strokeStyle = "#101e28";
+      c.lineWidth = 3;
+      c.strokeText(String(e.amount), p.x, p.y - 95 - progress * 35);
+      c.fillStyle = e.color;
+      c.fillText(String(e.amount), p.x, p.y - 95 - progress * 35);
+    } else if (e.kind === "coins") {
       c.translate(p.x, p.y - 65 - progress * 42);
       ellipse(c, -19, 0, 6, 8, "#dab25a", "#715b30", 1.5);
       ellipse(c, -19, 0, 3, 5, "", "#ffe4a0", 1);
@@ -649,7 +902,7 @@ export class Renderer {
         c.restore();
       }
     } else if (e.kind === "lightning" && e.points) {
-      c.shadowBlur = 12;
+      c.shadowBlur = 0;
       c.shadowColor = e.color;
       for (let i = 1; i < e.points.length; i++) {
         const a = P(
@@ -698,7 +951,28 @@ export class Renderer {
     }
     c.restore();
   }
-  wall(c: Ctx, w: Wall) {
+  wall(c: Ctx, w: Wall, active = false) {
+    if (w.hp > 0 && (active || w.hp < w.maxHp * 0.98)) {
+      const y = w.y * 0.72 - (w.w > w.h ? 10 : (w.h * 0.72) / 2) - 88,
+        bar = w.w > w.h ? 74 : 49;
+      c.fillStyle = "#0a1b25";
+      c.fillRect(w.x - bar / 2 - 2, y - 2, bar + 4, 9);
+      c.fillStyle =
+        w.hp < w.maxHp * 0.3
+          ? "#ed977d"
+          : w.hp < w.maxHp * 0.65
+            ? "#dfbd7d"
+            : "#91c5ad";
+      c.fillRect(w.x - bar / 2, y, (bar * w.hp) / w.maxHp, 5);
+      if (w.hp < w.maxHp * 0.98) {
+        c.font = "bold 10px sans-serif";
+        c.textAlign = "center";
+        c.fillStyle = "#e6d6b6";
+        c.fillText(`${Math.ceil(w.hp)} / ${w.maxHp}`, w.x, y - 7);
+      }
+    }
+  }
+  wallArt(c: Ctx, w: Wall) {
     const p = P(w.x, w.y),
       horizontal = w.w > w.h,
       width = horizontal ? w.w : 28,
@@ -830,13 +1104,8 @@ export class Renderer {
       line(c, [p.x - 7, top + 12], [p.x + 4, top + 31], "#243a44", 3);
       line(c, [p.x + 4, top + 31], [p.x - 9, top + 48], "#243a44", 3);
     }
-    if (w.hp < w.maxHp * 0.95) {
-      c.fillStyle = "#132a31";
-      c.fillRect(p.x - 37, top - 30, 74, 5);
-      c.fillStyle = w.hp < w.maxHp * 0.3 ? "#e07458" : "#c2b184";
-      c.fillRect(p.x - 37, top - 30, (74 * w.hp) / w.maxHp, 5);
-    }
   }
+
   tower(c: Ctx, x: number, y: number, t: number) {
     const p = P(x, y);
     if (this.propsReady) {
@@ -919,19 +1188,18 @@ export class Renderer {
     c.translate(p.x, p.y);
     ellipse(c, 7, 8, 85, 42, "#0d222b77");
     if (this.floorPropsReady) {
-      c.filter = "brightness(.86) saturate(.82)";
-      c.drawImage(
+      const image = this.cache.sprite(
+        "access",
         this.floorProps,
         this.floorProps.width / 2,
         0,
         this.floorProps.width / 2,
         this.floorProps.height,
-        -92,
-        -113,
         184,
         184,
+        "brightness(.86) saturate(.82)",
       );
-      c.filter = "none";
+      c.drawImage(image, -92, -113, 184, 184);
     } else {
       c.fillStyle = "#253c48";
       c.fillRect(-55, -35, 110, 70);
@@ -995,19 +1263,18 @@ export class Renderer {
       c.fillRect(-80, -100, 160, 160);
     }
     if (this.floorPropsReady) {
-      c.filter = "brightness(.9) saturate(.85)";
-      c.drawImage(
+      const image = this.cache.sprite(
+        "stock",
         this.floorProps,
         0,
         0,
         this.floorProps.width / 2,
         this.floorProps.height,
-        -66,
-        -119 - stock.pulse * 2,
         132,
         132,
+        "brightness(.9) saturate(.85)",
       );
-      c.filter = "none";
+      c.drawImage(image, -66, -119 - stock.pulse * 2, 132, 132);
     } else {
       c.fillStyle = "#9e784d";
       c.fillRect(-30, -30, 60, 35);
@@ -1035,21 +1302,22 @@ export class Renderer {
         -Math.cos(b.angle) * b.recoil * 13,
         -Math.sin(b.angle) * b.recoil * 9,
       );
-      if (!b.loaded) c.filter = "saturate(.6) brightness(.85)";
+
       if (this.ballistaAtlasReady) {
         const direction =
           (Math.round((b.angle + Math.PI / 2) / (Math.PI / 4)) + 8) % 8;
-        c.drawImage(
+        const image = this.cache.sprite(
+          `ballista:${direction}`,
           this.ballistaAtlas,
           ((direction % 4) * this.ballistaAtlas.width) / 4,
           ((direction < 4 ? 160 : 700) * this.ballistaAtlas.height) / 1254,
           this.ballistaAtlas.width / 4,
           (450 * this.ballistaAtlas.height) / 1254,
-          -62,
-          -87,
           124,
           148,
+          b.loaded ? "" : "saturate(.6) brightness(.85)",
         );
+        c.drawImage(image, -62, -87, 124, 148);
       } else
         c.drawImage(
           this.props,
@@ -1202,17 +1470,17 @@ export class Renderer {
     if (this.workerAtlasReady) {
       c.save();
       if (Math.cos(w.facing) < 0) c.scale(-1, 1);
-      c.drawImage(
+      const image = this.cache.sprite(
+        `worker:${frame}`,
         this.workerAtlas,
         (frame * this.workerAtlas.width) / 4,
         0,
         this.workerAtlas.width / 4,
         this.workerAtlas.height,
-        -46,
-        -121,
         92,
         121,
       );
+      c.drawImage(image, -46, -121, 92, 121);
       c.restore();
     } else {
       c.fillStyle = "#b38d5f";
@@ -1291,7 +1559,7 @@ export class Renderer {
         -146,
       );
     }
-    if (a.hurt > 0) c.filter = "brightness(1.7) sepia(.3)";
+    const tone = a.hurt > 0 ? "brightness(1.7) sepia(.3)" : "";
     if (ally && this.walkAtlasReady) {
       const state = spriteFrame(a),
         img = state.shooting
@@ -1313,17 +1581,18 @@ export class Renderer {
             : a.facing;
       if (Math.cos(facing) < -0.05) c.scale(-1, 1);
       if (a.dodge > 0) c.rotate(0.28);
-      c.drawImage(
+      const image = this.cache.sprite(
+        `hero:${a.hero}:${state.shooting}:${state.frame}`,
         sheet,
         (state.frame * sheet.width) / 4,
         (row.y * sheet.height) / 1254,
         sheet.width / 4,
         (row.h * sheet.height) / 1254,
-        -49,
-        -128,
         98,
         128,
+        tone,
       );
+      c.drawImage(image, -49, -128, 98, 128);
       c.restore();
     } else if (this.atlasReady) {
       const index = ally
@@ -1336,17 +1605,18 @@ export class Renderer {
       c.translate(0, bob);
       if (Math.cos(a.facing) < 0) c.scale(-1, 1);
       if (ally && a.dodge > 0) c.rotate(0.35);
-      c.drawImage(
+      const image = this.cache.sprite(
+        `enemy:${index}`,
         this.atlas,
-        (index % 4) * (this.atlas.width / 4),
+        ((index % 4) * this.atlas.width) / 4,
         ((index < 4 ? 170 : 660) * this.atlas.height) / 1254,
         this.atlas.width / 4,
         ((index < 4 ? 480 : 510) * this.atlas.height) / 1254,
-        -w / 2,
-        -h * 0.79,
         w,
         h * 0.79,
+        tone,
       );
+      c.drawImage(image, -w / 2, -h * 0.79, w, h * 0.79);
       c.restore();
     } else this.fallbackActor(c, a, bob);
     c.filter = "none";
@@ -1355,11 +1625,31 @@ export class Renderer {
         ? -154
         : -145
       : -85;
-    if (a.hp < a.maxHp || ally) {
+    if (a.hp > 0) {
       c.fillStyle = "#172c35";
-      c.fillRect(-21, labelY + 12 + bob, 42, 5);
+      c.fillRect(-23, labelY + 10 + bob, 46, 9);
       c.fillStyle = ally ? (player ? "#ecc38a" : a.color) : "#d77868";
       c.fillRect(-21, labelY + 12 + bob, 42 * clamp(a.hp / a.maxHp, 0, 1), 5);
+    }
+    if (!ally && a.hp > 0) {
+      if (a.hurt > 0 || a.kind === "brute") {
+        c.font = "bold 11px sans-serif";
+        c.textAlign = "center";
+        c.fillStyle = "#efd0bd";
+        c.fillText(String(Math.ceil(a.hp)), 0, labelY + 5 + bob);
+      }
+      if (
+        !a.moving &&
+        a.stun <= 0 &&
+        a.cooldown < 0.55 &&
+        a.kind !== "runner" &&
+        a.kind !== "brute"
+      ) {
+        c.fillStyle = "#ffc09b";
+        c.font = "bold 20px sans-serif";
+        c.textAlign = "center";
+        c.fillText("!", 25, -83);
+      }
     }
     if (ally) {
       c.font = "600 12px sans-serif";
@@ -1504,13 +1794,24 @@ export class Renderer {
     c.save();
     c.translate(p.x, p.y);
     const s = 1 + Math.sin(t * 12 + x) * 0.08;
-    const glow = c.createRadialGradient(0, -11, 3, 0, -11, 105 * s);
-    glow.addColorStop(0, "#ffbf6948");
-    glow.addColorStop(0.4, "#ff9e3a20");
-    glow.addColorStop(1, "#ff9e3a00");
+    const glow = this.cache.surface(
+      "torch-glow",
+      220,
+      220,
+      (ctx) => {
+        const light = ctx.createRadialGradient(110, 110, 3, 110, 110, 105);
+        light.addColorStop(0, "#ffbf6948");
+        light.addColorStop(0.4, "#ff9e3a20");
+        light.addColorStop(1, "#ff9e3a00");
+        ctx.fillStyle = light;
+        ctx.fillRect(0, 0, 220, 220);
+      },
+      1,
+    );
     c.globalCompositeOperation = "screen";
-    c.fillStyle = glow;
-    c.fillRect(-110, -121, 220, 220);
+    c.globalAlpha = 0.92 + 0.08 * Math.sin(t * 7 + x);
+    c.drawImage(glow, -110 * s, -11 - 110 * s, 220 * s, 220 * s);
+    c.globalAlpha = 1;
     c.globalCompositeOperation = "source-over";
     line(c, [0, 12], [0, -9], "#775841", 7);
     ellipse(c, 0, -10, 10, 5, "#a17d45", "#2f3e3e", 2);
@@ -1545,17 +1846,17 @@ export class Renderer {
     c.restore();
   }
   prop(c: Ctx, index: number, x: number, y: number, w: number, h: number) {
-    c.drawImage(
+    const image = this.cache.sprite(
+      `prop:${index}`,
       this.props,
       ((index % 2) * this.props.width) / 2,
       (Math.floor(index / 2) * this.props.height) / 2,
       this.props.width / 2,
       this.props.height / 2,
-      x - w / 2,
-      y - h,
-      w,
-      h,
+      256,
+      256,
     );
+    c.drawImage(image, x - w / 2, y - h, w, h);
   }
   drawMinimap(canvas: HTMLCanvasElement, g: Simulation) {
     const c = canvas.getContext("2d")!,
@@ -1566,17 +1867,35 @@ export class Renderer {
     c.clearRect(0, 0, w, h);
     c.fillStyle = "#152c32";
     c.fillRect(0, 0, w, h);
-    c.drawImage(
-      this.terrain,
-      0,
-      0,
-      this.terrain.width,
-      WORLD.h * 0.72,
-      0,
-      0,
-      w,
-      h,
-    );
+    if (
+      !this.miniTerrain ||
+      this.miniTerrain.width !== w ||
+      this.miniTerrain.height !== h
+    ) {
+      this.miniTerrain = document.createElement("canvas");
+      this.miniTerrain.width = w;
+      this.miniTerrain.height = h;
+      this.miniTerrain
+        .getContext("2d")!
+        .drawImage(
+          this.terrain,
+          0,
+          0,
+          this.terrain.width,
+          WORLD.h * 0.72,
+          0,
+          0,
+          w,
+          h,
+        );
+    }
+    c.drawImage(this.miniTerrain, 0, 0);
+    for (const f of frontState(g))
+      if (f.active) {
+        const b = SECTOR_BANDS[f.side];
+        c.fillStyle = "#e6a06c66";
+        c.fillRect(b.x * sx, b.y * sy, b.w * sx, b.h * sy);
+      }
     for (const wall of g.walls) {
       c.fillStyle =
         wall.hp <= 0

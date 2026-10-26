@@ -95,6 +95,7 @@ window.addEventListener("keydown", (e) => {
       game.notice("Choix d’emplacement annulé. Aucune pièce dépensée.");
     } else ui.togglePause();
   }
+  if (k === "m") renderer.toggleOverview();
   if (k === "tab") ui.toggleOrders();
   if (k === "b") ui.toggleShop();
   if (k === "h") ui.toggleHelp();
@@ -145,8 +146,11 @@ canvas.addEventListener(
 window.addEventListener("resize", () => renderer.resize());
 let last = performance.now(),
   accumulator = 0;
+let lastRender = -Infinity;
 function frame(now: number) {
-  const delta = Math.min((now - last) / 1000, 0.1);
+  const frameMs = now - last;
+  if (game.started && !game.paused) renderer.observeFrame(frameMs);
+  const delta = Math.min(frameMs / 1000, 0.1);
   last = now;
   accumulator += delta;
   // Fixed simulation clock; the renderer never owns game state.
@@ -190,7 +194,10 @@ function frame(now: number) {
     lastHurt = now;
     tone(80, 0.2, "square", 0.015);
   }
-  renderer.render(game, delta, aim);
+  if ((game.started && !game.paused) || now - lastRender > 120) {
+    renderer.render(game, delta, aim);
+    lastRender = now;
+  }
   ui.update(now);
   requestAnimationFrame(frame);
 }
