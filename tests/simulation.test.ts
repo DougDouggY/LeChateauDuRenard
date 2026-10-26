@@ -268,11 +268,16 @@ test("bow allies defend before equipment exists and refill autonomously", () => 
   run(g, 12);
   assert.equal(g.ballistas.length, 0);
   assert.ok(g.enemies.some((e) => e.hp < e.maxHp));
-  g.defenders[1].ammo = 0;
-  g.defenders[1].x = g.stocks[0].x + 10;
-  g.defenders[1].y = g.stocks[0].y;
-  run(g, 0.1);
-  assert.equal(g.defenders[1].ammo, 24);
+  // Isolate refilling from live combat: a defender may legitimately fire again
+  // immediately after refilling, which otherwise makes an exact ammo count race.
+  const refill = setup(),
+    archer = refill.defenders[1],
+    stock = refill.stocks[0];
+  archer.ammo = 0;
+  archer.x = stock.x + 10;
+  archer.y = stock.y;
+  run(refill, 0.1);
+  assert.equal(archer.ammo, 24);
 });
 test("worker rejects unaffordable orders and equipment on an occupied socket", () => {
   const g = setup();
