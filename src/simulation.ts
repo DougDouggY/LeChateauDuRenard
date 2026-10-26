@@ -38,6 +38,7 @@ import { Workshop } from "./workshop";
 import { projectileHeight } from "./combat";
 import { HEROES, DEFAULT_ROSTER, hero } from "./heroes";
 import { powerImpact, effect } from "./powers";
+import { wallDamageStage } from "./destruction";
 export class Simulation {
   time = 0;
   tick = 0;
@@ -308,6 +309,30 @@ export class Simulation {
     const w = this.walls[id];
     if (!w || w.hp <= 0) return;
     w.hp = Math.max(0, w.hp - n);
+    const stage = wallDamageStage(w.hp, w.maxHp);
+    // One impact event per section at a time; collapse always replaces it.
+    this.effects = this.effects.filter(
+      (e) =>
+        !(
+          (e.kind === "wall-hit" || e.kind === "wall-collapse") &&
+          e.wallId === w.id
+        ),
+    );
+    effect(
+      this,
+      stage === 4 ? "wall-collapse" : "wall-hit",
+      w,
+      "#c3bcaa",
+      Math.max(w.w, w.h) * 0.55,
+      stage === 4 ? 1.8 : 0.75,
+      {
+        stage,
+        width: w.w,
+        height: w.h * 0.72,
+        z: 52,
+        wallId: w.id,
+      },
+    );
     this.shake = 3;
     this.particlesAt(w, "#b7b4a4", 10);
     if (w.hp === 0)
@@ -348,6 +373,10 @@ export class Simulation {
       );
       b.loaded = false;
       b.recoil = 1;
+      effect(this, "bolt-launch", b, "#cdbb95", 80, 0.35, {
+        angle: b.angle,
+        z: elevation(b) + 42,
+      });
       d.cooldown = 0.25;
       this.shake = 2;
       return;
@@ -430,6 +459,12 @@ export class Simulation {
     d.attacking = 0.16;
     const bonus = 10 * this.level("arrows"),
       power = shot.power;
+    if (power)
+      effect(this, "cast", d, hero(d.hero).color, 60, 0.38, {
+        power,
+        angle: d.facing,
+        z: elevation(d) + 65,
+      });
     if (power === "multishot") {
       const a = d.facing,
         dist = Math.max(400, distance(d, target));
@@ -513,8 +548,8 @@ export class Simulation {
       power,
       ownerId,
       effectDone: false,
-      x: from.x + dir.x * 25,
-      y: from.y + dir.y * 25,
+      x: from.x + dir.x * (kind === "bolt" ? 70 : 25),
+      y: from.y + dir.y * (kind === "bolt" ? 70 : 25),
       px: from.x,
       py: from.y,
       vx: dir.x * speed,
@@ -524,9 +559,10 @@ export class Simulation {
       damage,
       team,
       kind,
-      startZ: elevation(from) + 25,
+      startZ:
+        elevation(from) + (team === "ally" ? (kind === "bolt" ? 42 : 65) : 25),
       endZ: manualAim
-        ? elevation(from) + 25
+        ? elevation(from) + (kind === "bolt" ? 42 : 65)
         : team === "enemy" && wallId !== null
           ? 32
           : elevation(to) + 18,
@@ -974,6 +1010,16 @@ export class Simulation {
               : segmentDistance({ x: q.px, y: q.py }, q, e) < e.radius + 6)
           ) {
             this.damageEnemy(e, q.damage);
+            if (q.kind === "bolt" || q.power === "piercing")
+              effect(
+                this,
+                q.kind === "bolt" ? "bolt-impact" : "pierce-impact",
+                e,
+                "#decda9",
+                60,
+                q.kind === "bolt" ? 0.85 : 0.45,
+                { angle: Math.atan2(q.vy * 0.72, q.vx), amount: q.pierce },
+              );
             q.hit.add(e.id);
             powerImpact(this, q, e);
             q.pierce--;

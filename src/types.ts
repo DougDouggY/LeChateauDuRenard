@@ -167,7 +167,21 @@ export interface Delivery {
 export interface CombatEffect extends Vec {
   id: number;
   kind:
-    "explosion" | "frost" | "lightning" | "heal" | "coins" | "ammo" | "damage";
+    | "explosion"
+    | "frost"
+    | "lightning"
+    | "heal"
+    | "coins"
+    | "ammo"
+    | "damage"
+    | "fire-impact"
+    | "poison-impact"
+    | "pierce-impact"
+    | "cast"
+    | "bolt-launch"
+    | "bolt-impact"
+    | "wall-hit"
+    | "wall-collapse";
   life: number;
   total: number;
   color: string;
@@ -175,6 +189,13 @@ export interface CombatEffect extends Vec {
   amount?: number;
   points?: Vec[];
   target?: Vec;
+  power?: PowerId;
+  angle?: number;
+  z?: number;
+  stage?: number;
+  width?: number;
+  height?: number;
+  wallId?: number;
 }
 export interface WaveAlert {
   text: string;

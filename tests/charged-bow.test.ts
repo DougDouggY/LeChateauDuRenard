@@ -94,7 +94,7 @@ test("manual arrows hit the visible body on the cursor line and miss an enemy ou
   g.spawn("goblin", 0);
   Object.assign(g.enemies[0], {
     x: 1300,
-    y: 1132,
+    y: 1076,
     hp: 1000,
     maxHp: 1000,
     stun: 100,

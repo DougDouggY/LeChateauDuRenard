@@ -15,6 +15,14 @@ export function effect(
   life = 0.6,
   extra: Partial<CombatEffect> = {},
 ) {
+  // Cosmetic events have a hard budget, independently of gameplay projectiles.
+  if (g.effects.length >= 160) {
+    const cosmetic = g.effects.findIndex(
+      (e) => e.kind !== "coins" && e.kind !== "damage",
+    );
+    if (cosmetic < 0) return;
+    g.effects.splice(cosmetic, 1);
+  }
   g.effects.push({
     id: g.nextId++,
     kind,
@@ -37,14 +45,14 @@ export function powerImpact(
   q.effectDone = true;
   const at = target ?? q;
   if (q.power === "explosive") {
-    effect(g, "explosion", at, "#f4b364", 140, 0.65);
+    effect(g, "explosion", at, "#f4b364", 140, 1.25);
     g.shake = 6;
     g.particlesAt(at, "#ffd18a", 28);
     for (const e of g.enemies)
       if (e.hp > 0 && distance(at, e) < 140)
         g.damageEnemy(e, 62 * (1 - distance(at, e) / 400));
   } else if (q.power === "frost") {
-    effect(g, "frost", at, "#9ae0f2", 110, 0.8);
+    effect(g, "frost", at, "#9ae0f2", 110, 1.35);
     g.particlesAt(at, "#c2ecf3", 18);
     for (const e of g.enemies)
       if (e.hp > 0 && distance(at, e) < 110) {
@@ -52,9 +60,11 @@ export function powerImpact(
         if (e !== target) g.damageEnemy(e, 12);
       }
   } else if (target && q.power === "fire") {
+    effect(g, "fire-impact", at, "#ffad5e", 65, 0.9);
     target.burn = 5;
     g.particlesAt(target, "#ffa358", 14);
   } else if (target && q.power === "poison") {
+    effect(g, "poison-impact", at, "#b9da77", 70, 1.25);
     target.poison = 6;
     g.particlesAt(target, "#b9d976", 12);
   } else if (target && q.power === "moon") {

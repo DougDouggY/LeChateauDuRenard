@@ -24,6 +24,8 @@ import { archerFrame, WALK_ROWS, SHOT_ROWS, spriteFrame } from "./animation";
 import { hero, WALK_SHEETS, SHOT_SHEETS } from "./heroes";
 import type { Workshop } from "./workshop";
 import { RenderCache } from "./render-cache";
+import { Vfx } from "./vfx";
+import { wallDamageStage } from "./destruction";
 import {
   frontState,
   priorityFront,
@@ -132,6 +134,7 @@ export class Renderer {
   floorPropsReady = false;
   portraits = new Map<number, string>();
   cache = new RenderCache();
+  vfx = new Vfx(this.cache);
   miniTerrain: HTMLCanvasElement | null = null;
   sceneTerrain: HTMLCanvasElement | null = null;
   private sceneSignature = "";
@@ -465,7 +468,7 @@ export class Renderer {
   }
   fortScene(g: Simulation): HTMLCanvasElement {
     const signature = g.walls
-      .map((w) => (w.hp <= 0 ? 0 : w.hp < w.maxHp * 0.65 ? 1 : 2))
+      .map((w) => wallDamageStage(w.hp, w.maxHp))
       .join("");
     if (!this.sceneTerrain) {
       this.sceneTerrain = document.createElement("canvas");
@@ -578,7 +581,10 @@ export class Renderer {
       });
     for (const b of g.ballistas)
       objects.push({
-        depth: b.y * 0.72,
+        depth:
+          b.user !== null
+            ? Math.max(b.y * 0.72, g.defenders[b.user].y * 0.72 + 1)
+            : b.y * 0.72,
         draw: () => this.ballista(c, b, g.time),
       });
     for (const a of [...g.defenders, ...g.enemies])
@@ -620,7 +626,10 @@ export class Renderer {
       c.save();
       c.translate(pp.x, pp.y);
       c.rotate(dir);
-      if (q.kind === "fire") {
+      this.vfx.trail(c, q, g.time);
+      if (q.kind === "bolt") {
+        // The animated heavy shaft is drawn by Vfx, without a second atlas arrow.
+      } else if (q.kind === "fire") {
         const glow = c.createRadialGradient(0, 0, 1, 0, 0, 23);
         glow.addColorStop(0, "#ffcc76");
         glow.addColorStop(1, "#fb752000");
@@ -655,8 +664,7 @@ export class Renderer {
           line(c, [-64, 0], [-30, 0], colors[q.power], 3);
           c.shadowBlur = 0;
         }
-        const w =
-          q.kind === "bolt" ? 83 : q.power ? 64 : q.team === "enemy" ? 60 : 53;
+        const w = q.power ? 64 : q.team === "enemy" ? 60 : 53;
         const sprite = this.cache.sprite(
           `arrow:${index}:${w}`,
           this.arrowAtlas,
@@ -869,9 +877,11 @@ export class Renderer {
         e.radius + 120,
         e.radius + 70,
         e.radius + 70,
-      )
+      ) &&
+      !e.points?.some((p) => this.visible(p, elevation(p) + 50))
     )
       return;
+    if (this.vfx.effect(c, e)) return;
     const progress = 1 - e.life / e.total,
       p = P(e.x, e.y, elevation(e));
     c.save();
@@ -915,53 +925,6 @@ export class Renderer {
         );
         c.restore();
       }
-    } else if (e.kind === "lightning" && e.points) {
-      c.shadowBlur = 0;
-      c.shadowColor = e.color;
-      for (let i = 1; i < e.points.length; i++) {
-        const a = P(
-            e.points[i - 1].x,
-            e.points[i - 1].y,
-            elevation(e.points[i - 1]) + 38,
-          ),
-          b = P(e.points[i].x, e.points[i].y, elevation(e.points[i]) + 38);
-        c.beginPath();
-        c.moveTo(a.x, a.y);
-        c.lineTo((a.x + b.x) / 2 + 13, (a.y + b.y) / 2 - 20);
-        c.lineTo((a.x + b.x) / 2 - 9, (a.y + b.y) / 2 + 8);
-        c.lineTo(b.x, b.y);
-        c.strokeStyle = e.color;
-        c.lineWidth = 3;
-        c.stroke();
-      }
-    } else if (e.kind === "heal") {
-      ellipse(c, p.x, p.y - 20 - progress * 40, 23, 9, "", e.color, 2);
-      if (e.amount) {
-        c.fillStyle = e.color;
-        c.font = "bold 12px sans-serif";
-        c.fillText(`+${e.amount}`, p.x - 11, p.y - 90 - progress * 20);
-      }
-    } else {
-      const radius = e.radius * (0.25 + 0.75 * progress);
-      c.translate(p.x, p.y - 18);
-      c.scale(1, 0.72);
-      const glow = c.createRadialGradient(0, 0, 1, 0, 0, radius);
-      glow.addColorStop(0, e.kind === "explosion" ? "#ffe4aabb" : "#a8eaff55");
-      glow.addColorStop(1, e.kind === "explosion" ? "#f9a25100" : "#a8eaff00");
-      c.fillStyle = glow;
-      c.fillRect(-radius, -radius, radius * 2, radius * 2);
-      ellipse(c, 0, 0, radius, radius, "", e.color, 3 * (1 - progress) + 1);
-      if (e.kind === "frost")
-        for (let i = 0; i < 8; i++) {
-          const a = (i * Math.PI) / 4;
-          line(
-            c,
-            [Math.cos(a) * radius * 0.65, Math.sin(a) * radius * 0.65],
-            [Math.cos(a) * radius, Math.sin(a) * radius],
-            e.color,
-            2,
-          );
-        }
     }
     c.restore();
   }
@@ -990,7 +953,8 @@ export class Renderer {
     const p = P(w.x, w.y),
       horizontal = w.w > w.h,
       width = horizontal ? w.w : 28,
-      height = horizontal ? 20 : w.h * 0.72;
+      height = horizontal ? 20 : w.h * 0.72,
+      stage = wallDamageStage(w.hp, w.maxHp);
     if (w.hp <= 0) {
       for (let i = 0; i < 8; i++) {
         const xx = p.x - width / 2 + ((i * 41) % width),
@@ -1049,6 +1013,7 @@ export class Renderer {
     c.fillRect(p.x - width / 2, top, width, 7);
     if (horizontal) {
       for (let x = p.x - width / 2 + 4; x < p.x + width / 2 - 7; x += 38) {
+        if (stage >= 3 && Math.floor((x - p.x) / 38 + w.id) % 3 === 0) continue;
         path(
           c,
           [
@@ -1114,9 +1079,81 @@ export class Renderer {
         line(c, [p.x - 13, p.y + 10], [p.x + 13, p.y + 10], "#263b42", 6);
       }
     }
-    if (w.hp < w.maxHp * 0.65) {
-      line(c, [p.x - 7, top + 12], [p.x + 4, top + 31], "#243a44", 3);
-      line(c, [p.x + 4, top + 31], [p.x - 9, top + 48], "#243a44", 3);
+    if (stage > 0) {
+      const seeded = rng(w.id * 91 + 4);
+      for (let i = 0; i < stage * 3; i++) {
+        const x = p.x + (seeded() - 0.5) * width * 0.85;
+        const y = top + 8 + seeded() * Math.max(12, bottom - top - 30);
+        const spread = 8 + stage * 5,
+          depth = 12 + stage * 9;
+        line(c, [x - 1, y], [x + spread * 0.5, y + depth * 0.45], "#a6a494", 1);
+        line(
+          c,
+          [x, y],
+          [x + spread * 0.5, y + depth * 0.45],
+          "#20343d",
+          1 + stage * 0.65,
+        );
+        line(
+          c,
+          [x + spread * 0.5, y + depth * 0.45],
+          [x - spread * 0.3, y + depth],
+          "#20343d",
+          1 + stage * 0.6,
+        );
+        line(
+          c,
+          [x + spread * 0.5, y + depth * 0.45],
+          [x + spread, y + depth * 0.55],
+          "#263b42",
+          1,
+        );
+      }
+      if (stage >= 2)
+        for (let i = 0; i < stage; i++) {
+          const x = p.x + (seeded() - 0.5) * width * 0.75,
+            y = top + 10 + seeded() * Math.max(10, bottom - top - 30);
+          path(
+            c,
+            [
+              [x - 9, y],
+              [x + 7, y - 4],
+              [x + 14, y + 6],
+              [x + 5, y + 14],
+              [x - 11, y + 8],
+            ],
+            "#2f4248",
+            "#9a9b8c",
+            1,
+          );
+          path(
+            c,
+            [
+              [x + 2, bottom + 3],
+              [x + 14, bottom - 1],
+              [x + 19, bottom + 8],
+              [x + 7, bottom + 11],
+            ],
+            "#74807e",
+            "#354a50",
+            1,
+          );
+        }
+      if (stage >= 3) {
+        path(
+          c,
+          [
+            [p.x - width * 0.24, top - 1],
+            [p.x - width * 0.13, top + 17],
+            [p.x + width * 0.03, top + 8],
+            [p.x + width * 0.18, top + 24],
+            [p.x + width * 0.28, top],
+          ],
+          "#253b43",
+          "#8b9691",
+          2,
+        );
+      }
     }
   }
 
@@ -1301,136 +1338,270 @@ export class Renderer {
   }
   ballista(c: Ctx, b: Ballista, t: number) {
     const p = P(b.x, b.y, elevation(b));
+    const angle = Math.atan2(Math.sin(b.angle) * 0.72, Math.cos(b.angle));
     c.save();
     c.translate(p.x, p.y);
+    ellipse(c, 7, 8, 58, 24, "#10212899");
     if (b.hp <= 0) {
-      line(c, [-30, -12], [28, 16], "#8b694b", 13);
-      line(c, [30, -18], [-24, 17], "#604b39", 10);
+      line(c, [-35, -15], [30, 17], "#926c44", 12);
+      line(c, [32, -21], [-24, 22], "#574534", 10);
       c.restore();
       return;
     }
-    ellipse(c, 5, 10, 48, 21, "#1e3036bb");
-    if (this.propsReady) {
-      c.save();
-      c.translate(
-        -Math.cos(b.angle) * b.recoil * 13,
-        -Math.sin(b.angle) * b.recoil * 9,
-      );
-
-      if (this.ballistaAtlasReady) {
-        const direction =
-          (Math.round((b.angle + Math.PI / 2) / (Math.PI / 4)) + 8) % 8;
-        const image = this.cache.sprite(
-          `ballista:${direction}`,
-          this.ballistaAtlas,
-          ((direction % 4) * this.ballistaAtlas.width) / 4,
-          ((direction < 4 ? 160 : 700) * this.ballistaAtlas.height) / 1254,
-          this.ballistaAtlas.width / 4,
-          (450 * this.ballistaAtlas.height) / 1254,
-          124,
-          148,
-          b.loaded ? "" : "saturate(.6) brightness(.85)",
+    // Fixed wheeled carriage. Only the upper weapon recoils.
+    c.save();
+    c.rotate(angle);
+    // Beveled side faces give the timber carriage its thickness.
+    path(
+      c,
+      [
+        [-43, 17],
+        [24, 17],
+        [38, 0],
+        [38, 12],
+        [24, 30],
+        [-43, 30],
+      ],
+      "#4f382a",
+      "#24353a",
+      2,
+    );
+    for (const side of [-1, 1]) {
+      const y = side * 29;
+      ellipse(c, -16, y, 20, 11, "#392f28", "#182b31", 3);
+      ellipse(c, -16, y, 15, 8, "#916940", "#ba8b52", 2);
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3 + (b.carrier !== null ? t * 4 : 0);
+        line(
+          c,
+          [-16, y],
+          [-16 + Math.cos(a) * 15, y + Math.sin(a) * 8],
+          "#4b3c2c",
+          2,
         );
-        c.drawImage(image, -62, -87, 124, 148);
-      } else
-        c.drawImage(
-          this.props,
-          this.props.width / 2,
-          0,
-          this.props.width / 2,
-          this.props.height / 2,
-          -73,
-          -80,
-          146,
-          146,
-        );
-      c.restore();
-      if (b.reload > 0) {
-        c.fillStyle = "#142a32";
-        c.fillRect(-33, -72, 66, 6);
-        c.fillStyle = "#d8b878";
-        c.fillRect(-33, -72, 66 * (1 - b.reload / 3.2), 6);
       }
-      if (!b.loaded && b.reload <= 0) {
-        c.font = "bold 11px sans-serif";
-        c.textAlign = "center";
-        c.fillStyle = "#daba85";
-        c.fillText("R · RECHARGER", 0, -76);
-      }
-      c.restore();
-      return;
-    }
-    const a = Math.atan2(Math.sin(b.angle) * 0.72, Math.cos(b.angle));
-    c.rotate(a);
-    for (const yy of [-26, 26]) {
-      ellipse(c, -9, yy, 19, 9, "#574737", "#1a2e34", 4);
-      ellipse(c, -9, yy, 11, 5, "#977044", "#2f3836", 2);
-      line(c, [-26, yy], [8, yy], "#c0985b", 2);
+      ellipse(c, -16, y, 4, 3, "#a9aa94", "#29383b", 1);
     }
     path(
       c,
       [
-        [-36, -18],
-        [20, -18],
-        [32, 0],
-        [20, 18],
-        [-36, 18],
+        [-43, -18],
+        [26, -18],
+        [38, 0],
+        [24, 18],
+        [-43, 18],
       ],
-      "#926a43",
-      "#25333a",
-      4,
+      "#795638",
+      "#26373d",
+      3,
     );
-    for (const xx of [-28, -8, 13]) {
-      line(c, [xx, -17], [xx, 17], "#bd925c", 3);
-      ellipse(c, xx, -11, 2, 2, "#374748");
-      ellipse(c, xx, 11, 2, 2, "#374748");
-    }
-    c.translate(-b.recoil * 14, 0);
-    line(c, [-40, 0], [43, 0], "#443629", 18);
-    line(c, [-38, -4], [43, -4], "#b68b58", 5);
-    line(c, [-34, 5], [38, 5], "#826244", 4);
+    const timber = this.cache.surface(
+      "ballista:timber",
+      96,
+      64,
+      (ctx) => {
+        const grain = rng(748);
+        ctx.fillStyle = "#9f784c";
+        ctx.fillRect(0, 0, 96, 64);
+        for (let i = 0; i < 35; i++) {
+          const y = grain() * 64;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.bezierCurveTo(
+            25,
+            y + (grain() - 0.5) * 7,
+            65,
+            y + (grain() - 0.5) * 7,
+            96,
+            y,
+          );
+          ctx.strokeStyle = i % 3 ? "#4b382b55" : "#dfb98066";
+          ctx.lineWidth = 0.5 + grain();
+          ctx.stroke();
+        }
+      },
+      1,
+    );
+    c.save();
     c.beginPath();
-    c.moveTo(22, -58);
-    c.quadraticCurveTo(53, -26, 43, 0);
-    c.quadraticCurveTo(53, 26, 22, 58);
-    c.strokeStyle = "#20323b";
-    c.lineWidth = 12;
-    c.stroke();
-    c.strokeStyle = "#aa7b45";
-    c.lineWidth = 7;
-    c.stroke();
-    line(c, [22, -57], [b.loaded ? -27 : 36, 0], "#d0bd8e", 2);
-    line(c, [b.loaded ? -27 : 36, 0], [22, 57], "#d0bd8e", 2);
-    if (b.loaded) {
-      line(c, [-32, 0], [66, 0], "#d0c3a0", 4);
+    c.moveTo(-40, -15);
+    c.lineTo(24, -15);
+    c.lineTo(34, 0);
+    c.lineTo(22, 15);
+    c.lineTo(-40, 15);
+    c.closePath();
+    c.clip();
+    c.globalAlpha = 0.65;
+    c.drawImage(timber, -43, -18, 81, 36);
+    c.restore();
+    for (let i = 0; i < 6; i++)
+      line(
+        c,
+        [-37, -13 + i * 5],
+        [27, -13 + i * 5],
+        i % 2 ? "#a48150" : "#4d3c2c",
+        1,
+      );
+    for (const x of [-32, 15]) {
+      line(c, [x, -17], [x, 17], "#333f40", 6);
+      for (const y of [-12, 12]) ellipse(c, x, y, 2, 2, "#c1bda1");
+    }
+    // Upright cradle joins the ground carriage to the elevated rail.
+    path(
+      c,
+      [
+        [-21, -8],
+        [0, -13],
+        [15, 9],
+        [-6, 15],
+      ],
+      "#ae8653",
+      "#34434a",
+      2,
+    );
+    c.restore();
+    // Four upright supports connect the raised firing rail to the axle bed.
+    for (const x of [-29, 22])
+      for (const y of [-10, 10]) {
+        const sx = Math.cos(angle) * x - Math.sin(angle) * y;
+        const sy = Math.sin(angle) * x + Math.cos(angle) * y;
+        path(
+          c,
+          [
+            [sx - 4, sy],
+            [sx + 5, sy + 1],
+            [sx + 5, sy - 40],
+            [sx - 4, sy - 43],
+          ],
+          "#725136",
+          "#26383d",
+          1.5,
+        );
+        line(c, [sx - 3, sy - 2], [sx - 3, sy - 40], "#c49c64", 1.5);
+        for (const off of [5, 34])
+          line(c, [sx - 4, sy - off], [sx + 5, sy - off], "#46514e", 3);
+      }
+    c.save();
+    c.translate(0, -42);
+    c.rotate(angle);
+    const progress = b.reload > 0 ? clamp(1 - b.reload / 3.2, 0, 1) : 0;
+    const draw = b.loaded ? 1 : b.reload > 0 ? progress : 0;
+    const age = (1 - b.recoil) * 0.25;
+    const vibration =
+      b.recoil > 0 ? Math.sin(age * 100) * Math.exp(-age * 17) * 8 : 0;
+    const kick =
+      b.recoil > 0
+        ? Math.sin((Math.min(1, age / 0.045) * Math.PI) / 2) *
+          Math.exp(-age * 10) *
+          14
+        : 0;
+    c.translate(-kick, 0);
+    // Grain, steel slide and torsion skeins remain rigid as the string snaps.
+    line(c, [-44, 0], [57, 0], "#25343a", 19);
+    line(c, [-43, -2], [58, -2], "#a9814f", 14);
+    c.save();
+    c.beginPath();
+    c.rect(-43, -7, 100, 11);
+    c.clip();
+    c.globalAlpha = 0.6;
+    c.drawImage(timber, -43, -7, 100, 11);
+    c.restore();
+    line(c, [-40, -6], [56, -6], "#d0ab71", 2);
+    line(c, [-40, 4], [56, 4], "#59432f", 3);
+    for (const y of [-5, 5]) line(c, [-38, y], [50, y], "#788582", 1);
+    const tip = 32 - draw * 12 + vibration * 0.45;
+    for (const side of [-1, 1]) {
+      c.beginPath();
+      c.moveTo(43, 0);
+      c.bezierCurveTo(52, side * 18, 48, side * 37, tip, side * 56);
+      c.strokeStyle = "#23363e";
+      c.lineWidth = 11;
+      c.stroke();
+      c.strokeStyle = "#9c7145";
+      c.lineWidth = 7;
+      c.stroke();
+      c.strokeStyle = "#cfaa70";
+      c.lineWidth = 2;
+      c.stroke();
+      for (let i = 0; i < 5; i++)
+        line(
+          c,
+          [38 + i * 2, side * 8],
+          [43 + i * 2, side * 19],
+          "#d5c89c",
+          1.5,
+        );
+      ellipse(c, tip, side * 56, 3, 3, "#a8aaa0", "#2c3f44", 1);
+    }
+    const notch = 33 - draw * 61 + vibration;
+    {
+      line(c, [tip, -56], [notch, 0], "#2c3027", 3);
+      line(c, [notch, 0], [tip, 56], "#2c3027", 3);
+      line(c, [tip, -56], [notch, 0], "#e0d5b1", 1.2);
+      line(c, [notch, 0], [tip, 56], "#e0d5b1", 1.2);
+    }
+    // Winch cranks turn as the rope is wound back over the reload interval.
+    ellipse(c, -43, 0, 10, 10, "#4d5652", "#21363c", 2);
+    const crank = progress * Math.PI * 12;
+    line(
+      c,
+      [-43 - Math.cos(crank) * 13, -Math.sin(crank) * 13],
+      [-43 + Math.cos(crank) * 13, Math.sin(crank) * 13],
+      "#c2b288",
+      3,
+    );
+    if (b.loaded || progress > 0.68) {
+      const insert = b.loaded ? 1 : clamp((progress - 0.68) / 0.32, 0, 1);
+      c.save();
+      c.globalAlpha = insert;
+      c.translate(-(1 - insert) * 40, 0);
+      line(c, [-38, 0], [65, 0], "#463629", 5);
+      line(c, [-38, -1], [65, -1], "#d1ba8b", 2);
       path(
         c,
         [
-          [76, 0],
-          [59, -7],
-          [59, 7],
+          [77, 0],
+          [60, -5],
+          [63, 0],
+          [60, 5],
         ],
-        "#bdd3d5",
-        "#344a50",
-        2,
+        "#c2d0cd",
+        "#40565a",
+        1,
       );
-      line(c, [-30, -6], [-17, 0], "#5c878e", 4);
+      for (const y of [-1, 1])
+        path(
+          c,
+          [
+            [-33, 0],
+            [-44, y * 8],
+            [-22, y * 3],
+          ],
+          "#72898b",
+          "#3b5156",
+          1,
+        );
+      c.restore();
     }
-    ellipse(c, -36, 0, 9, 9, "#5f6257", "#2c3b3c", 3);
-    line(c, [-36, -15], [-36, 15], "#b2a17b", 4);
     c.restore();
     if (b.reload > 0) {
-      c.fillStyle = "#182e37";
-      c.fillRect(p.x - 33, p.y - 63, 66, 6);
+      c.fillStyle = "#142a32";
+      c.fillRect(-34, -91, 68, 5);
       c.fillStyle = "#d8b878";
-      c.fillRect(p.x - 33, p.y - 63, 66 * (1 - b.reload / 3.2), 6);
+      c.fillRect(-34, -91, 68 * progress, 5);
+    } else if (!b.loaded) {
+      c.font = "bold 10px sans-serif";
+      c.textAlign = "center";
+      c.fillStyle = "#e2c38c";
+      c.fillText("R · RECHARGER", 0, -88);
     }
     if (b.hp < b.maxHp * 0.9) {
-      c.fillStyle = "#142d34";
-      c.fillRect(p.x - 30, p.y + 26, 60, 4);
-      c.fillStyle = "#c09a6d";
-      c.fillRect(p.x - 30, p.y + 26, (60 * b.hp) / b.maxHp, 4);
+      c.fillStyle = "#172d34";
+      c.fillRect(-28, 27, 56, 4);
+      c.fillStyle = "#c6a276";
+      c.fillRect(-28, 27, (56 * b.hp) / b.maxHp, 4);
     }
+    c.restore();
   }
   slot(
     c: Ctx,
@@ -1633,6 +1804,7 @@ export class Renderer {
       c.drawImage(image, -w / 2, -h * 0.79, w, h * 0.79);
       c.restore();
     } else this.fallbackActor(c, a, bob);
+    if (!ally && a.hp > 0) this.vfx.status(c, a, t);
     c.filter = "none";
     const labelY = this.atlasReady
       ? !ally && a.kind === "brute"

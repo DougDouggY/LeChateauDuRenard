@@ -157,7 +157,10 @@ function frame(now: number) {
   // Fixed simulation clock; the renderer never owns game state.
   const deckAim = renderer.world(input.mouse, FLOOR_HEIGHT);
   const aim = insideFort(deckAim) ? deckAim : renderer.world(input.mouse);
-  input.aimRay = renderer.world(input.mouse, elevation(game.player) + 25);
+  input.aimRay = renderer.world(
+    input.mouse,
+    elevation(game.player) + (game.player.mounted !== null ? 42 : 65),
+  );
   let consumed = false;
   while (accumulator >= 1 / 60) {
     game.update(1 / 60, input, aim);

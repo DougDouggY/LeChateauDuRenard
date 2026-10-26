@@ -4,7 +4,17 @@ Prototype jouable de défense de château, TypeScript / Canvas 2D / Vite.
 
 **Jouer : https://dougdouggy.github.io/LeChateauDuRenard/**
 
-## Version 0.5 — tir chargé et visée directe
+## Version 0.6 — pouvoirs, mécanique et destruction
+
+Les pouvoirs ont des animations distinctes au départ, pendant le vol et à l’impact : explosion avec souffle, flammes, braises et fumée ; givre en cristaux qui poussent puis se brisent ; feu persistant sur les ennemis ; volutes et gouttelettes de poison ; décharges de foudre ramifiées ; motes de soin ; gerbe de tir multiple ; trace et éclats du trait perforant. Les flèches partent à la hauteur de l’arc, les trajectoires manuelles restent alignées sur le pointeur.
+
+La baliste dispose d’un mécanisme animé en continu : chariot à roues et supports, rail surélevé, bras sous tension, détente et vibration amortie de la corde, recul du mécanisme, treuil qui tourne au rechargement et insertion progressive du carreau. Le carreau sort du rail, conserve son empennage et produit des éclats à l’impact. Le chariot ne recule pas en bloc et le départ ne produit pas de flash de poudre.
+
+Les sections de rempart passent par **cinq états** : intact, ébréché (80 %), fissuré (55 %), critique avec blocs manquants (25 %), puis décombres (0 %). Les impacts détachent des éclats ; la rupture projette des pierres avec chute, rotation et poussière, puis les décombres restent au sol. Les réparations rétablissent l’apparence correspondant à la santé restaurée. Les seuils sont relatifs à la vie maximale, améliorations comprises. Les tours décoratives ne sont pas destructibles.
+
+Les lueurs et fumées utilisent des sprites procéduraux en cache ; aucun flou dynamique n’est appliqué par effet. Les effets sont limités à 160 événements cosmétiques simultanés, les particules à 450. Les murs ne sont recomposés que lorsqu’ils changent de stade. Les poses des archers restent les cycles illustrés existants ; les nouvelles animations d’effets et de mécanique sont procédurales.
+
+## Tir chargé et visée directe
 
 **Maintenir le clic gauche pour tendre l’arc, relâcher pour tirer.** La charge atteint son maximum après 0,95 s ; elle augmente la portée de 250 à 1 300 unités et les dégâts de 18 à 56 avant améliorations. Une jauge autour du viseur indique la tension, les poses de l’archer suivent la charge. Le maintien ne déclenche aucun tir automatique et ne réserve qu’une flèche. Pause et perte de focus annulent la charge et rendent cette flèche.
 
@@ -90,9 +100,10 @@ Node.js 22.12+ et npm ; validation avec Node 24. Aucune clé, base de données o
 ```sh
 npm ci
 npm run dev -- --port 5173
-npm test                 # 43 tests : simulation, pouvoirs, fronts, charge, visée et dash
+npm test                 # 47 tests : simulation, pouvoirs, fronts, charge, visée, dash et destruction
 npm run build            # TypeScript et bundle de production
 npm run test:browser     # Sélection, contrôles, pouvoir, alertes, une manche réelle et livraisons
+npm run test:effects     # 11 vérifications des phases des pouvoirs, murs et baliste
 npm run test:production  # Bundle servi sous /LeChateauDuRenard/
 npm run preview
 ```
@@ -109,6 +120,8 @@ Les tests navigateur utilisent `/usr/bin/chromium` ou `CHROMIUM_PATH`. Le parcou
 | `src/strategy.ts`     | Compagnons et ennemis, pouvoirs IA et statuts de contrôle           |
 | `src/animation.ts`    | Poses de marche/tir et cadrage des atlas                            |
 | `src/combat.ts`       | Hauteur des projectiles partagée entre rendu et collisions          |
+| `src/vfx.ts`          | Effets physiques déterministes, fumée en cache et traînées          |
+| `src/destruction.ts`  | Seuils de dégâts partagés par les murs et leurs événements          |
 | `src/fronts.ts`       | Menaces, intégrité par front et priorité de défense                 |
 | `src/render-cache.ts` | Cache des sprites précadrés et traitements de couleur               |
 | `src/renderer.ts`     | Sprites, terrain, lumière, effets, portraits et vue d’ensemble      |
